@@ -1,0 +1,24 @@
+# Build output directory
+build/
+
+# Compiled executables and object files
+*.exe
+*.obj
+*.o
+
+# IDE and editor files
+.vs/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS-generated files
+Thumbs.db
+desktop.ini
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
