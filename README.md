@@ -6,7 +6,7 @@ This is a learning project — every component (networking, protocol parsing, da
 
 ## Current Status
 
-🚧 **Milestone 0: Environment & Project Setup** — Build toolchain verified, project structure created.
+🚧 **Milestone 1: In-Memory Database** — Core key-value store implemented with SET, GET, DEL, EXISTS, FLUSHDB.
 
 ## Prerequisites
 
@@ -56,7 +56,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 ## Roadmap
 
 - [x] Milestone 0: Environment & project setup
-- [ ] Milestone 1: In-memory database (SET, GET, DEL, EXISTS, FLUSHDB)
+- [x] Milestone 1: In-memory database (SET, GET, DEL, EXISTS, FLUSHDB)
 - [ ] Milestone 2: TCP networking with Winsock2
 - [ ] Milestone 3: RESP protocol parser & encoder
 - [ ] Milestone 4: Core Redis command compatibility

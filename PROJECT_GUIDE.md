@@ -49,7 +49,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 
 ## Development Roadmap
 
-### Milestone 0: Environment & Project Setup ✅ (In Progress)
+### Milestone 0: Environment & Project Setup ✅
 - [x] Verify GCC, CMake, Git, GDB installation
 - [x] Create project directory structure
 - [x] Create .gitignore
@@ -59,17 +59,17 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Connect local repo to GitHub remote
 - [x] Update README.md
 - [x] Create PROJECT_GUIDE.md
-- [ ] Create CHANGELOG.md
-- [ ] Commit and push all initial files to GitHub
+- [x] Create CHANGELOG.md
+- [x] Commit and push all initial files to GitHub
 
-### Milestone 1: In-memory Database
-- [ ] Design key-value store using std::unordered_map
-- [ ] Implement SET command
-- [ ] Implement GET command
-- [ ] Implement DEL command
-- [ ] Implement EXISTS command
-- [ ] Implement FLUSHDB command
-- [ ] Write unit tests for all operations
+### Milestone 1: In-memory Database ✅
+- [x] Design key-value store using std::unordered_map
+- [x] Implement SET command
+- [x] Implement GET command
+- [x] Implement DEL command
+- [x] Implement EXISTS command
+- [x] Implement FLUSHDB command
+- [x] Write unit tests for all operations
 
 ### Milestone 2: TCP Networking (Winsock2)
 - [ ] Initialize Winsock
@@ -149,6 +149,6 @@ None yet — project is in initial setup phase.
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — initial files not yet committed.
-- **Build status:** ✅ Compiles and runs successfully.
-- **Next task:** Create CHANGELOG.md, then commit all initial files to GitHub.
+- **Last verified commit:** Pending — Milestone 1 files ready for commit.
+- **Build status:** ✅ Compiles and runs successfully. All 22 tests pass.
+- **Next task:** Commit Milestone 1, then begin Milestone 2 (TCP Networking).

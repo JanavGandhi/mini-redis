@@ -20,11 +20,38 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # This ensures our code is portable, standard-compliant C++.
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Create an executable target named "mini-redis" from the listed source files.
-# As the project grows, we will add more .cpp files here.
+# ─── Library Target ──────────────────────────────────────────────────────────
+# Build the core database logic as a static library so both the server
+# executable and the test executable can link against it without
+# compiling the same source files twice.
+
+add_library(mini-redis-lib STATIC
+    src/database.cpp
+)
+
+# Let any target that links mini-redis-lib use #include "database.h"
+# by adding the src/ directory to its include search path.
+# PUBLIC means this include path is inherited by targets that link us.
+target_include_directories(mini-redis-lib PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+# Enable strict compiler warnings on the library as well.
+target_compile_options(mini-redis-lib PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
+# ─── Server Executable ───────────────────────────────────────────────────────
+# Create the main server executable.
+
 add_executable(mini-redis
     src/main.cpp
 )
+
+# Link the core library so main.cpp can use the Database class.
+target_link_libraries(mini-redis PRIVATE mini-redis-lib)
 
 # Enable strict compiler warnings to catch potential bugs early.
 #   -Wall      : Enable most common warnings.
@@ -32,6 +59,23 @@ add_executable(mini-redis
 #   -Wpedantic : Warn about non-standard C++ usage.
 # PRIVATE means these flags only apply to this target, not to anything linking against it.
 target_compile_options(mini-redis PRIVATE
+    -Wall
+    -Wextra
+    -Wpedantic
+)
+
+# ─── Test Executable ─────────────────────────────────────────────────────────
+# Build the test runner as a separate executable.
+# Run it after building to verify everything works: ./build/mini-redis-tests.exe
+
+add_executable(mini-redis-tests
+    tests/database_test.cpp
+)
+
+# Link the core library so tests can use the Database class.
+target_link_libraries(mini-redis-tests PRIVATE mini-redis-lib)
+
+target_compile_options(mini-redis-tests PRIVATE
     -Wall
     -Wextra
     -Wpedantic
