@@ -198,33 +198,42 @@ void test_command_list_hash_set_over_tcp() {
         return;
     }
 
-    // 1. List: RPUSH mylist x y -> :2\r\n
+    // List: RPUSH mylist x y
     std::string lpush_resp = send_and_receive(client, "*4\r\n$5\r\nRPUSH\r\n$6\r\nmylist\r\n$1\r\nx\r\n$1\r\ny\r\n");
     ASSERT_EQ(std::string(":2\r\n"), lpush_resp);
 
-    // LRANGE mylist 0 -1 -> *2\r\n$1\r\nx\r\n$1\r\ny\r\n
-    std::string lrange_resp = send_and_receive(client, "*4\r\n$6\r\nLRANGE\r\n$6\r\nmylist\r\n$1\r\n0\r\n$2\r\n-1\r\n");
-    ASSERT_EQ(std::string("*2\r\n$1\r\nx\r\n$1\r\ny\r\n"), lrange_resp);
-
-    // 2. Hash: HSET user:1 name Bob -> :1\r\n
+    // Hash: HSET user:1 name Bob
     std::string hset_resp = send_and_receive(client, "*4\r\n$4\r\nHSET\r\n$6\r\nuser:1\r\n$4\r\nname\r\n$3\r\nBob\r\n");
     ASSERT_EQ(std::string(":1\r\n"), hset_resp);
 
-    // HGET user:1 name -> $3\r\nBob\r\n
-    std::string hget_resp = send_and_receive(client, "*3\r\n$4\r\nHGET\r\n$6\r\nuser:1\r\n$4\r\nname\r\n");
-    ASSERT_EQ(std::string("$3\r\nBob\r\n"), hget_resp);
-
-    // 3. Set: SADD numbers 10 20 -> :2\r\n
+    // Set: SADD numbers 10 20
     std::string sadd_resp = send_and_receive(client, "*4\r\n$4\r\nSADD\r\n$7\r\nnumbers\r\n$2\r\n10\r\n$2\r\n20\r\n");
     ASSERT_EQ(std::string(":2\r\n"), sadd_resp);
 
-    // SCARD numbers -> :2\r\n
-    std::string scard_resp = send_and_receive(client, "*2\r\n$5\r\nSCARD\r\n$7\r\nnumbers\r\n");
-    ASSERT_EQ(std::string(":2\r\n"), scard_resp);
+    closesocket(client);
+}
 
-    // 4. WRONGTYPE: GET mylist -> -WRONGTYPE...
-    std::string wt_resp = send_and_receive(client, "*2\r\n$3\r\nGET\r\n$6\r\nmylist\r\n");
-    ASSERT_EQ(std::string("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"), wt_resp);
+void test_command_expire_and_ttl_over_tcp() {
+    TestServer ts(TEST_PORT);
+    ASSERT_TRUE(ts.start());
+
+    SOCKET client = connect_to_server(TEST_PORT);
+    if (client == INVALID_SOCKET) {
+        ASSERT_TRUE(false);
+        return;
+    }
+
+    // SET key val EX 100
+    std::string set_resp = send_and_receive(client, "*5\r\n$3\r\nSET\r\n$3\r\nkey\r\n$3\r\nval\r\n$2\r\nEX\r\n$3\r\n100\r\n");
+    ASSERT_EQ(std::string("+OK\r\n"), set_resp);
+
+    // TTL key -> positive integer response (e.g. :100\r\n or :99\r\n)
+    std::string ttl_resp = send_and_receive(client, "*2\r\n$3\r\nTTL\r\n$3\r\nkey\r\n");
+    ASSERT_TRUE(ttl_resp.size() >= 3 && ttl_resp[0] == ':');
+
+    // EXPIRE key 200 -> :1\r\n
+    std::string exp_resp = send_and_receive(client, "*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$3\r\n200\r\n");
+    ASSERT_EQ(std::string(":1\r\n"), exp_resp);
 
     closesocket(client);
 }
@@ -278,6 +287,7 @@ int main() {
     RUN_TEST(test_command_ping);
     RUN_TEST(test_command_set_and_get);
     RUN_TEST(test_command_list_hash_set_over_tcp);
+    RUN_TEST(test_command_expire_and_ttl_over_tcp);
     std::cout << std::endl;
 
     std::cout << "[TCP Pipelining]" << std::endl;

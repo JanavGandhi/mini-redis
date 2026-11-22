@@ -25,7 +25,13 @@ private:
     static RespValue handle_del(const std::vector<std::string>& args, Database& db);
     static RespValue handle_exists(const std::vector<std::string>& args, const Database& db);
 
-    // String commands
+    // Expiration & TTL commands (Milestone 6)
+    static RespValue handle_expire(const std::vector<std::string>& args, Database& db);
+    static RespValue handle_pexpire(const std::vector<std::string>& args, Database& db);
+    static RespValue handle_ttl(const std::vector<std::string>& args, const Database& db);
+    static RespValue handle_pttl(const std::vector<std::string>& args, const Database& db);
+
+    // String commands (with EX / PX options)
     static RespValue handle_set(const std::vector<std::string>& args, Database& db);
     static RespValue handle_get(const std::vector<std::string>& args, const Database& db);
 

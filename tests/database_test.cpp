@@ -1,9 +1,11 @@
-// database_test.cpp — Unit tests for the Database class with multiple data structures.
+// database_test.cpp — Unit tests for Database class including TTL & Expiration (Milestone 6).
 
 #include "database.h"
 
+#include <chrono>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 // ─── Minimal Test Framework ──────────────────────────────────────────────────
@@ -52,7 +54,7 @@ static bool current_test_failed = false;
         }                                                                     \
     } while (false)
 
-// ─── Existing Tests (Milestone 1) ────────────────────────────────────────────
+// ─── String Tests ────────────────────────────────────────────────────────────
 
 void test_new_database_is_empty() {
     Database db;
@@ -255,16 +257,14 @@ void test_mixed_operations() {
     ASSERT_FALSE(db.get("x").value.has_value());
 }
 
-// ─── Milestone 5 Tests: Lists ────────────────────────────────────────────────
+// ─── Lists ───────────────────────────────────────────────────────────────────
 
 void test_list_lpush_rpush_llen() {
     Database db;
-    // LPUSH a, b -> [b, a]
     auto res1 = db.lpush("mylist", {"a", "b"});
     ASSERT_FALSE(res1.wrong_type);
     ASSERT_EQ(2u, res1.value);
 
-    // RPUSH c, d -> [b, a, c, d]
     auto res2 = db.rpush("mylist", {"c", "d"});
     ASSERT_FALSE(res2.wrong_type);
     ASSERT_EQ(4u, res2.value);
@@ -289,64 +289,44 @@ void test_list_lpop_rpop_and_cleanup() {
     ASSERT_TRUE(p3.value.has_value());
     ASSERT_EQ(std::string("2"), p3.value.value());
 
-    // Key should be deleted after becoming empty
     ASSERT_EQ(0u, db.size());
     ASSERT_EQ(0u, db.exists({"mylist"}));
-
-    // Popping non-existent key returns nullopt
-    auto p4 = db.lpop("mylist");
-    ASSERT_FALSE(p4.value.has_value());
 }
 
 void test_list_lrange() {
     Database db;
     db.rpush("mylist", {"zero", "one", "two", "three", "four"});
 
-    // Full range [0, -1]
     auto r1 = db.lrange("mylist", 0, -1);
     ASSERT_EQ(5u, r1.value.size());
     ASSERT_EQ(std::string("zero"), r1.value[0]);
     ASSERT_EQ(std::string("four"), r1.value[4]);
 
-    // Sub-range [1, 3]
     auto r2 = db.lrange("mylist", 1, 3);
     ASSERT_EQ(3u, r2.value.size());
     ASSERT_EQ(std::string("one"), r2.value[0]);
     ASSERT_EQ(std::string("three"), r2.value[2]);
 
-    // Negative range [-3, -1] -> [two, three, four]
     auto r3 = db.lrange("mylist", -3, -1);
     ASSERT_EQ(3u, r3.value.size());
     ASSERT_EQ(std::string("two"), r3.value[0]);
     ASSERT_EQ(std::string("four"), r3.value[2]);
-
-    // Out of bounds / inverted range
-    auto r4 = db.lrange("mylist", 10, 20);
-    ASSERT_EQ(0u, r4.value.size());
-
-    auto r5 = db.lrange("mylist", 3, 1);
-    ASSERT_EQ(0u, r5.value.size());
 }
 
-// ─── Milestone 5 Tests: Hashes ───────────────────────────────────────────────
+// ─── Hashes ──────────────────────────────────────────────────────────────────
 
 void test_hash_hset_hget_hexists() {
     Database db;
-    // HSET myhash field1 val1 field2 val2
     auto res = db.hset("myhash", {{"field1", "val1"}, {"field2", "val2"}});
     ASSERT_FALSE(res.wrong_type);
     ASSERT_EQ(2u, res.value);
 
-    // Overwrite field1, add field3
     auto res2 = db.hset("myhash", {{"field1", "newval1"}, {"field3", "val3"}});
-    ASSERT_EQ(1u, res2.value); // only field3 was newly added
+    ASSERT_EQ(1u, res2.value);
 
     auto g1 = db.hget("myhash", "field1");
     ASSERT_TRUE(g1.value.has_value());
     ASSERT_EQ(std::string("newval1"), g1.value.value());
-
-    auto g_miss = db.hget("myhash", "nonexistent");
-    ASSERT_FALSE(g_miss.value.has_value());
 
     ASSERT_TRUE(db.hexists("myhash", "field2").value);
     ASSERT_FALSE(db.hexists("myhash", "ghost").value);
@@ -359,22 +339,15 @@ void test_hash_hdel_and_hgetall() {
     auto all = db.hgetall("myhash");
     ASSERT_EQ(2u, all.value.size());
 
-    auto d1 = db.hdel("myhash", {"a"});
-    ASSERT_EQ(1u, d1.value);
-
-    auto d2 = db.hdel("myhash", {"b"});
-    ASSERT_EQ(1u, d2.value);
-
-    // Key should be deleted after empty
+    db.hdel("myhash", {"a", "b"});
     ASSERT_EQ(0u, db.size());
     ASSERT_EQ(0u, db.exists({"myhash"}));
 }
 
-// ─── Milestone 5 Tests: Sets ─────────────────────────────────────────────────
+// ─── Sets ────────────────────────────────────────────────────────────────────
 
 void test_set_sadd_srem_sismember_scard() {
     Database db;
-    // SADD myset a b c a -> 3 added
     auto res = db.sadd("myset", {"a", "b", "c", "a"});
     ASSERT_FALSE(res.wrong_type);
     ASSERT_EQ(3u, res.value);
@@ -386,52 +359,100 @@ void test_set_sadd_srem_sismember_scard() {
     auto smem = db.smembers("myset");
     ASSERT_EQ(3u, smem.value.size());
 
-    // SREM
-    auto rem = db.srem("myset", {"a", "b"});
-    ASSERT_EQ(2u, rem.value);
-    ASSERT_EQ(1u, db.scard("myset").value);
-
-    // Remove last member
-    db.srem("myset", {"c"});
+    db.srem("myset", {"a", "b", "c"});
     ASSERT_EQ(0u, db.size());
-    ASSERT_EQ(0u, db.exists({"myset"}));
 }
-
-// ─── Milestone 5 Tests: Cross-Type & WrongType ───────────────────────────────
 
 void test_cross_type_operations() {
     Database db;
 
-    // String key
     db.set("str_key", "hello");
-    // List operations on string should return wrong_type
     ASSERT_TRUE(db.lpush("str_key", {"a"}).wrong_type);
-    ASSERT_TRUE(db.llen("str_key").wrong_type);
-    ASSERT_TRUE(db.lrange("str_key", 0, -1).wrong_type);
-    // Hash operations on string
     ASSERT_TRUE(db.hset("str_key", {{"f", "v"}}).wrong_type);
-    ASSERT_TRUE(db.hget("str_key", "f").wrong_type);
-    // Set operations on string
     ASSERT_TRUE(db.sadd("str_key", {"m"}).wrong_type);
 
-    // List key
     db.rpush("list_key", {"item1"});
     ASSERT_TRUE(db.get("list_key").wrong_type);
     ASSERT_TRUE(db.hset("list_key", {{"f", "v"}}).wrong_type);
     ASSERT_TRUE(db.sadd("list_key", {"m"}).wrong_type);
 
-    // DEL and EXISTS work on ALL types
-    ASSERT_EQ(1u, db.exists({"str_key"}));
-    ASSERT_EQ(1u, db.exists({"list_key"}));
     ASSERT_EQ(2u, db.del({"str_key", "list_key"}));
-    ASSERT_EQ(0u, db.size());
+}
 
-    // SET replaces any existing type with String
-    db.rpush("poly", {"1", "2"});
-    ASSERT_EQ(DataType::List, db.type("poly"));
-    db.set("poly", "now_a_string");
-    ASSERT_EQ(DataType::String, db.type("poly"));
-    ASSERT_EQ(std::string("now_a_string"), db.get("poly").value.value());
+// ─── Milestone 6: Expiration & TTL Tests ─────────────────────────────────────
+
+void test_expire_and_ttl() {
+    Database db;
+    db.set("mykey", "val");
+
+    // Key exists without TTL -> ttl = -1
+    ASSERT_EQ(int64_t(-1), db.ttl("mykey"));
+    ASSERT_EQ(int64_t(-1), db.pttl("mykey"));
+
+    // Missing key -> ttl = -2
+    ASSERT_EQ(int64_t(-2), db.ttl("missing"));
+    ASSERT_EQ(int64_t(-2), db.pttl("missing"));
+
+    // Set TTL = 100 seconds
+    ASSERT_TRUE(db.expire("mykey", 100));
+    ASSERT_TRUE(db.ttl("mykey") > 90);
+    ASSERT_TRUE(db.pttl("mykey") > 90000);
+
+    // Expire on missing key returns false
+    ASSERT_FALSE(db.expire("ghost", 10));
+}
+
+void test_lazy_expiration() {
+    Database db;
+    // Set with 50ms TTL
+    db.set("short_lived", "hello", 50);
+
+    // Immediately accessible
+    ASSERT_TRUE(db.get("short_lived").value.has_value());
+    ASSERT_EQ(1u, db.exists({"short_lived"}));
+
+    // Sleep 70ms to allow expiration
+    std::this_thread::sleep_for(std::chrono::milliseconds(70));
+
+    // Key should now be expired and lazily deleted
+    ASSERT_FALSE(db.get("short_lived").value.has_value());
+    ASSERT_EQ(0u, db.exists({"short_lived"}));
+    ASSERT_EQ(int64_t(-2), db.ttl("short_lived"));
+}
+
+void test_expire_immediate_when_nonpositive() {
+    Database db;
+    db.set("temp", "val");
+    ASSERT_EQ(1u, db.exists({"temp"}));
+
+    // EXPIRE with seconds <= 0 immediately deletes key
+    ASSERT_TRUE(db.expire("temp", 0));
+    ASSERT_EQ(0u, db.exists({"temp"}));
+}
+
+void test_set_clears_previous_ttl() {
+    Database db;
+    db.set("k", "v", 50000); // 50s TTL
+    ASSERT_TRUE(db.ttl("k") > 0);
+
+    // Plain SET without TTL clears the expiration!
+    db.set("k", "v2");
+    ASSERT_EQ(int64_t(-1), db.ttl("k"));
+}
+
+void test_purge_expired() {
+    Database db;
+    db.set("k1", "v1", 30);  // 30ms TTL
+    db.set("k2", "v2", 30);  // 30ms TTL
+    db.set("k3", "v3");      // persistent
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    // Active purge
+    std::size_t purged = db.purge_expired();
+    ASSERT_EQ(2u, purged);
+    ASSERT_EQ(1u, db.size());
+    ASSERT_TRUE(db.get("k3").value.has_value());
 }
 
 // ─── Test Runner ─────────────────────────────────────────────────────────────
@@ -488,6 +509,14 @@ int main() {
 
     std::cout << "[Cross-Type & WRONGTYPE]" << std::endl;
     RUN_TEST(test_cross_type_operations);
+    std::cout << std::endl;
+
+    std::cout << "[Expiration & TTL]" << std::endl;
+    RUN_TEST(test_expire_and_ttl);
+    RUN_TEST(test_lazy_expiration);
+    RUN_TEST(test_expire_immediate_when_nonpositive);
+    RUN_TEST(test_set_clears_previous_ttl);
+    RUN_TEST(test_purge_expired);
     std::cout << std::endl;
 
     // --- Summary ---

@@ -16,7 +16,7 @@ void handle_shutdown(int /* signal */) {
 
 int main() {
     std::cout << "==========================================" << std::endl;
-    std::cout << "        mini-redis server v0.6.0          " << std::endl;
+    std::cout << "        mini-redis server v0.7.0          " << std::endl;
     std::cout << "==========================================" << std::endl;
     std::cout << std::endl;
 
@@ -36,7 +36,8 @@ int main() {
     std::cout << std::endl;
     std::cout << "Supported commands:" << std::endl;
     std::cout << "  Core:    PING, ECHO, DEL, EXISTS, FLUSHDB" << std::endl;
-    std::cout << "  Strings: SET, GET" << std::endl;
+    std::cout << "  TTL:     EXPIRE, PEXPIRE, TTL, PTTL" << std::endl;
+    std::cout << "  Strings: SET (with EX / PX), GET" << std::endl;
     std::cout << "  Lists:   LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN" << std::endl;
     std::cout << "  Hashes:  HSET, HGET, HDEL, HEXISTS, HGETALL" << std::endl;
     std::cout << "  Sets:    SADD, SREM, SISMEMBER, SMEMBERS, SCARD" << std::endl;

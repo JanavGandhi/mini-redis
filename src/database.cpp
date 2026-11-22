@@ -1,14 +1,35 @@
-// database.cpp — Implementation of in-memory multi-type database engine.
+// database.cpp — Implementation of database engine with TTL & expiration.
 
 #include "database.h"
 
 #include <algorithm>
+
+// ─── Lazy Expiration Helper ─────────────────────────────────────────────────
+
+bool Database::check_and_expire(const std::string& key) const {
+    auto exp_it = expires_.find(key);
+    if (exp_it == expires_.end()) {
+        return false;
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    if (now >= exp_it->second) {
+        // Expired! Delete key from store and expires table.
+        store_.erase(key);
+        expires_.erase(exp_it);
+        return true;
+    }
+
+    return false;
+}
 
 // ─── Generic Key Operations ──────────────────────────────────────────────────
 
 std::size_t Database::del(const std::vector<std::string>& keys) {
     std::size_t count = 0;
     for (const auto& key : keys) {
+        check_and_expire(key);
+        expires_.erase(key);
         count += store_.erase(key);
     }
     return count;
@@ -17,20 +38,29 @@ std::size_t Database::del(const std::vector<std::string>& keys) {
 std::size_t Database::exists(const std::vector<std::string>& keys) const {
     std::size_t count = 0;
     for (const auto& key : keys) {
-        count += store_.count(key);
+        if (!check_and_expire(key)) {
+            count += store_.count(key);
+        }
     }
     return count;
 }
 
 void Database::flushdb() {
     store_.clear();
+    expires_.clear();
 }
 
 std::size_t Database::size() const {
+    // Purge expired keys first to return accurate active count
+    const_cast<Database*>(this)->purge_expired();
     return store_.size();
 }
 
 DataType Database::type(const std::string& key) const {
+    if (check_and_expire(key)) {
+        return DataType::None;
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DataType::None;
@@ -42,13 +72,103 @@ DataType Database::type(const std::string& key) const {
     return DataType::None;
 }
 
+// ─── Expiration & TTL Operations (Milestone 6) ───────────────────────────────
+
+bool Database::expire(const std::string& key, int64_t seconds) {
+    return pexpire(key, seconds * 1000);
+}
+
+bool Database::pexpire(const std::string& key, int64_t milliseconds) {
+    if (check_and_expire(key)) {
+        return false;
+    }
+
+    auto it = store_.find(key);
+    if (it == store_.end()) {
+        return false;
+    }
+
+    if (milliseconds <= 0) {
+        // Immediate expiration
+        store_.erase(it);
+        expires_.erase(key);
+        return true;
+    }
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(milliseconds);
+    expires_[key] = deadline;
+    return true;
+}
+
+int64_t Database::ttl(const std::string& key) const {
+    int64_t ms = pttl(key);
+    if (ms < 0) {
+        return ms; // -2 (missing/expired) or -1 (no expire)
+    }
+    // Round up so that 500ms remaining reports 1 second
+    return (ms + 999) / 1000;
+}
+
+int64_t Database::pttl(const std::string& key) const {
+    if (check_and_expire(key)) {
+        return -2;
+    }
+
+    if (store_.find(key) == store_.end()) {
+        return -2;
+    }
+
+    auto exp_it = expires_.find(key);
+    if (exp_it == expires_.end()) {
+        return -1;
+    }
+
+    auto now = std::chrono::steady_clock::now();
+    if (now >= exp_it->second) {
+        // Expired right now
+        store_.erase(key);
+        expires_.erase(exp_it);
+        return -2;
+    }
+
+    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(exp_it->second - now).count();
+    return diff > 0 ? diff : 0;
+}
+
+std::size_t Database::purge_expired() {
+    auto now = std::chrono::steady_clock::now();
+    std::size_t purged = 0;
+
+    for (auto it = expires_.begin(); it != expires_.end();) {
+        if (now >= it->second) {
+            store_.erase(it->first);
+            it = expires_.erase(it);
+            ++purged;
+        } else {
+            ++it;
+        }
+    }
+
+    return purged;
+}
+
 // ─── String Operations ───────────────────────────────────────────────────────
 
-void Database::set(const std::string& key, const std::string& value) {
+void Database::set(const std::string& key, const std::string& value, int64_t ttl_ms) {
     store_[key] = value;
+    if (ttl_ms > 0) {
+        expires_[key] = std::chrono::steady_clock::now() + std::chrono::milliseconds(ttl_ms);
+    } else {
+        // Plain SET clears any previous TTL
+        expires_.erase(key);
+    }
 }
 
 DbResult<std::optional<std::string>> Database::get(const std::string& key) const {
+    if (check_and_expire(key)) {
+        return DbResult<std::optional<std::string>>::success(std::nullopt);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::optional<std::string>>::success(std::nullopt);
@@ -63,6 +183,8 @@ DbResult<std::optional<std::string>> Database::get(const std::string& key) const
 // ─── List Operations ─────────────────────────────────────────────────────────
 
 DbResult<std::size_t> Database::lpush(const std::string& key, const std::vector<std::string>& values) {
+    check_and_expire(key);
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         it = store_.emplace(key, std::deque<std::string>{}).first;
@@ -73,7 +195,6 @@ DbResult<std::size_t> Database::lpush(const std::string& key, const std::vector<
         return DbResult<std::size_t>::wrong_type_err();
     }
 
-    // In Redis: LPUSH mylist a b c pushes a, then b, then c to the head
     for (const auto& val : values) {
         list->push_front(val);
     }
@@ -82,6 +203,8 @@ DbResult<std::size_t> Database::lpush(const std::string& key, const std::vector<
 }
 
 DbResult<std::size_t> Database::rpush(const std::string& key, const std::vector<std::string>& values) {
+    check_and_expire(key);
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         it = store_.emplace(key, std::deque<std::string>{}).first;
@@ -100,6 +223,10 @@ DbResult<std::size_t> Database::rpush(const std::string& key, const std::vector<
 }
 
 DbResult<std::optional<std::string>> Database::lpop(const std::string& key) {
+    if (check_and_expire(key)) {
+        return DbResult<std::optional<std::string>>::success(std::nullopt);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::optional<std::string>>::success(std::nullopt);
@@ -112,6 +239,7 @@ DbResult<std::optional<std::string>> Database::lpop(const std::string& key) {
 
     if (list->empty()) {
         store_.erase(it);
+        expires_.erase(key);
         return DbResult<std::optional<std::string>>::success(std::nullopt);
     }
 
@@ -120,12 +248,17 @@ DbResult<std::optional<std::string>> Database::lpop(const std::string& key) {
 
     if (list->empty()) {
         store_.erase(it);
+        expires_.erase(key);
     }
 
     return DbResult<std::optional<std::string>>::success(std::move(val));
 }
 
 DbResult<std::optional<std::string>> Database::rpop(const std::string& key) {
+    if (check_and_expire(key)) {
+        return DbResult<std::optional<std::string>>::success(std::nullopt);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::optional<std::string>>::success(std::nullopt);
@@ -138,6 +271,7 @@ DbResult<std::optional<std::string>> Database::rpop(const std::string& key) {
 
     if (list->empty()) {
         store_.erase(it);
+        expires_.erase(key);
         return DbResult<std::optional<std::string>>::success(std::nullopt);
     }
 
@@ -146,12 +280,17 @@ DbResult<std::optional<std::string>> Database::rpop(const std::string& key) {
 
     if (list->empty()) {
         store_.erase(it);
+        expires_.erase(key);
     }
 
     return DbResult<std::optional<std::string>>::success(std::move(val));
 }
 
 DbResult<std::size_t> Database::llen(const std::string& key) const {
+    if (check_and_expire(key)) {
+        return DbResult<std::size_t>::success(0);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::size_t>::success(0);
@@ -166,6 +305,10 @@ DbResult<std::size_t> Database::llen(const std::string& key) const {
 }
 
 DbResult<std::vector<std::string>> Database::lrange(const std::string& key, int64_t start, int64_t stop) const {
+    if (check_and_expire(key)) {
+        return DbResult<std::vector<std::string>>::success({});
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::vector<std::string>>::success({});
@@ -181,11 +324,9 @@ DbResult<std::vector<std::string>> Database::lrange(const std::string& key, int6
         return DbResult<std::vector<std::string>>::success({});
     }
 
-    // Convert negative indices
     if (start < 0) start = n + start;
     if (stop < 0)  stop  = n + stop;
 
-    // Clamp indices
     if (start < 0) start = 0;
     if (stop >= n) stop = n - 1;
 
@@ -205,6 +346,8 @@ DbResult<std::vector<std::string>> Database::lrange(const std::string& key, int6
 // ─── Hash Operations ─────────────────────────────────────────────────────────
 
 DbResult<std::size_t> Database::hset(const std::string& key, const std::vector<std::pair<std::string, std::string>>& field_values) {
+    check_and_expire(key);
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         it = store_.emplace(key, std::unordered_map<std::string, std::string>{}).first;
@@ -227,6 +370,10 @@ DbResult<std::size_t> Database::hset(const std::string& key, const std::vector<s
 }
 
 DbResult<std::optional<std::string>> Database::hget(const std::string& key, const std::string& field) const {
+    if (check_and_expire(key)) {
+        return DbResult<std::optional<std::string>>::success(std::nullopt);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::optional<std::string>>::success(std::nullopt);
@@ -246,6 +393,10 @@ DbResult<std::optional<std::string>> Database::hget(const std::string& key, cons
 }
 
 DbResult<std::size_t> Database::hdel(const std::string& key, const std::vector<std::string>& fields) {
+    if (check_and_expire(key)) {
+        return DbResult<std::size_t>::success(0);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::size_t>::success(0);
@@ -263,12 +414,17 @@ DbResult<std::size_t> Database::hdel(const std::string& key, const std::vector<s
 
     if (hash->empty()) {
         store_.erase(it);
+        expires_.erase(key);
     }
 
     return DbResult<std::size_t>::success(count);
 }
 
 DbResult<bool> Database::hexists(const std::string& key, const std::string& field) const {
+    if (check_and_expire(key)) {
+        return DbResult<bool>::success(false);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<bool>::success(false);
@@ -283,6 +439,10 @@ DbResult<bool> Database::hexists(const std::string& key, const std::string& fiel
 }
 
 DbResult<std::vector<std::pair<std::string, std::string>>> Database::hgetall(const std::string& key) const {
+    if (check_and_expire(key)) {
+        return DbResult<std::vector<std::pair<std::string, std::string>>>::success({});
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::vector<std::pair<std::string, std::string>>>::success({});
@@ -300,6 +460,8 @@ DbResult<std::vector<std::pair<std::string, std::string>>> Database::hgetall(con
 // ─── Set Operations ──────────────────────────────────────────────────────────
 
 DbResult<std::size_t> Database::sadd(const std::string& key, const std::vector<std::string>& members) {
+    check_and_expire(key);
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         it = store_.emplace(key, std::unordered_set<std::string>{}).first;
@@ -322,6 +484,10 @@ DbResult<std::size_t> Database::sadd(const std::string& key, const std::vector<s
 }
 
 DbResult<std::size_t> Database::srem(const std::string& key, const std::vector<std::string>& members) {
+    if (check_and_expire(key)) {
+        return DbResult<std::size_t>::success(0);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::size_t>::success(0);
@@ -339,12 +505,17 @@ DbResult<std::size_t> Database::srem(const std::string& key, const std::vector<s
 
     if (set->empty()) {
         store_.erase(it);
+        expires_.erase(key);
     }
 
     return DbResult<std::size_t>::success(count);
 }
 
 DbResult<bool> Database::sismember(const std::string& key, const std::string& member) const {
+    if (check_and_expire(key)) {
+        return DbResult<bool>::success(false);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<bool>::success(false);
@@ -359,6 +530,10 @@ DbResult<bool> Database::sismember(const std::string& key, const std::string& me
 }
 
 DbResult<std::vector<std::string>> Database::smembers(const std::string& key) const {
+    if (check_and_expire(key)) {
+        return DbResult<std::vector<std::string>>::success({});
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::vector<std::string>>::success({});
@@ -374,6 +549,10 @@ DbResult<std::vector<std::string>> Database::smembers(const std::string& key) co
 }
 
 DbResult<std::size_t> Database::scard(const std::string& key) const {
+    if (check_and_expire(key)) {
+        return DbResult<std::size_t>::success(0);
+    }
+
     auto it = store_.find(key);
     if (it == store_.end()) {
         return DbResult<std::size_t>::success(0);

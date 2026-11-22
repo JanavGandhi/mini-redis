@@ -94,10 +94,10 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Hashes (HSET, HGET, HDEL, HGETALL, HEXISTS)
 - [x] Sets (SADD, SREM, SISMEMBER, SMEMBERS, SCARD)
 
-### Milestone 6: Expiration & TTL
-- [ ] EXPIRE, TTL, PTTL
-- [ ] SET with EX/PX options
-- [ ] Lazy and periodic expiration
+### Milestone 6: Expiration & TTL ✅
+- [x] EXPIRE, TTL, PTTL
+- [x] SET with EX/PX options
+- [x] Lazy and periodic expiration
 
 ### Milestone 7: Persistence
 - [ ] Snapshot save/load
@@ -149,6 +149,6 @@ None yet — project is in initial setup phase.
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — Milestone 5 files ready for commit.
-- **Build status:** ✅ Compiles and runs successfully. All 74 tests pass (28 database + 28 RESP + 12 command + 6 server).
-- **Next task:** Commit Milestone 5, then begin Milestone 6 (Expiration & TTL).
+- **Last verified commit:** Pending — Milestone 6 files ready for commit.
+- **Build status:** ✅ Compiles and runs successfully. All 81 tests pass (33 database + 28 RESP + 13 command + 7 server).
+- **Next task:** Commit Milestone 6, then begin Milestone 7 (Persistence: Snapshots & Append-Only Log).

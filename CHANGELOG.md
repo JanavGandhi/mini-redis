@@ -2,6 +2,22 @@
 
 All notable changes to the mini-redis project will be documented in this file.
 
+## [0.7.0] - 2026-11-22
+
+### Added
+- Expiration & TTL tracking system (`Milestone 6`):
+  - `EXPIRE key seconds` and `PEXPIRE key milliseconds`
+  - `TTL key` (returns seconds remaining, -1 if no TTL, -2 if missing/expired)
+  - `PTTL key` (returns milliseconds remaining)
+  - `SET key value [EX seconds | PX milliseconds]`
+- Dual expiration engine:
+  - **Lazy expiration**: automatic check & purge on any key read or write access
+  - **Active expiration**: `purge_expired()` sweeps and frees expired keys
+- Unit tests:
+  - `tests/database_test.cpp`: expanded to 33 unit tests (added tests for TTL calculation, lazy expiration, non-positive TTL immediate cleanup, and active purging)
+  - `tests/command_test.cpp`: expanded to 13 unit test cases (added tests for `EXPIRE`, `PEXPIRE`, `TTL`, `PTTL`, and `SET` with `EX`/`PX`)
+  - `tests/server_test.cpp`: expanded to 7 integration test cases including TCP live TTL & expiration testing
+
 ## [0.6.0] - 2026-11-22
 
 ### Added

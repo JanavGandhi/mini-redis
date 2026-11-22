@@ -56,7 +56,13 @@ RespValue CommandDispatcher::execute_args(const std::vector<std::string>& args, 
     if (cmd == "DEL")       return handle_del(args, db);
     if (cmd == "EXISTS")    return handle_exists(args, db);
 
-    // String
+    // TTL / Expiration (Milestone 6)
+    if (cmd == "EXPIRE")    return handle_expire(args, db);
+    if (cmd == "PEXPIRE")   return handle_pexpire(args, db);
+    if (cmd == "TTL")       return handle_ttl(args, db);
+    if (cmd == "PTTL")      return handle_pttl(args, db);
+
+    // String (with EX/PX)
     if (cmd == "SET")       return handle_set(args, db);
     if (cmd == "GET")       return handle_get(args, db);
 
@@ -133,14 +139,84 @@ RespValue CommandDispatcher::handle_exists(const std::vector<std::string>& args,
     return RespValue::make_integer(static_cast<int64_t>(count));
 }
 
-// ─── String Handlers ─────────────────────────────────────────────────────────
+// ─── Expiration & TTL Handlers (Milestone 6) ─────────────────────────────────
+
+RespValue CommandDispatcher::handle_expire(const std::vector<std::string>& args, Database& db) {
+    if (args.size() != 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'expire' command");
+    }
+    int64_t seconds = 0;
+    if (!parse_int64_arg(args[2], seconds)) {
+        return RespValue::make_error("ERR value is not an integer or out of range");
+    }
+    bool ok = db.expire(args[1], seconds);
+    return RespValue::make_integer(ok ? 1 : 0);
+}
+
+RespValue CommandDispatcher::handle_pexpire(const std::vector<std::string>& args, Database& db) {
+    if (args.size() != 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'pexpire' command");
+    }
+    int64_t ms = 0;
+    if (!parse_int64_arg(args[2], ms)) {
+        return RespValue::make_error("ERR value is not an integer or out of range");
+    }
+    bool ok = db.pexpire(args[1], ms);
+    return RespValue::make_integer(ok ? 1 : 0);
+}
+
+RespValue CommandDispatcher::handle_ttl(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'ttl' command");
+    }
+    int64_t val = db.ttl(args[1]);
+    return RespValue::make_integer(val);
+}
+
+RespValue CommandDispatcher::handle_pttl(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'pttl' command");
+    }
+    int64_t val = db.pttl(args[1]);
+    return RespValue::make_integer(val);
+}
+
+// ─── String Handlers (with EX/PX) ───────────────────────────────────────────
 
 RespValue CommandDispatcher::handle_set(const std::vector<std::string>& args, Database& db) {
-    if (args.size() != 3) {
+    if (args.size() < 3) {
         return RespValue::make_error("ERR wrong number of arguments for 'set' command");
     }
-    db.set(args[1], args[2]);
-    return RespValue::make_simple_string("OK");
+
+    int64_t ttl_ms = 0;
+
+    if (args.size() == 3) {
+        // Plain SET key value
+        db.set(args[1], args[2], 0);
+        return RespValue::make_simple_string("OK");
+    } else if (args.size() == 5) {
+        std::string opt = to_upper(args[3]);
+        if (opt == "EX") {
+            int64_t sec = 0;
+            if (!parse_int64_arg(args[4], sec) || sec <= 0) {
+                return RespValue::make_error("ERR value is not an integer or out of range");
+            }
+            ttl_ms = sec * 1000;
+        } else if (opt == "PX") {
+            int64_t ms = 0;
+            if (!parse_int64_arg(args[4], ms) || ms <= 0) {
+                return RespValue::make_error("ERR value is not an integer or out of range");
+            }
+            ttl_ms = ms;
+        } else {
+            return RespValue::make_error("ERR syntax error");
+        }
+
+        db.set(args[1], args[2], ttl_ms);
+        return RespValue::make_simple_string("OK");
+    }
+
+    return RespValue::make_error("ERR syntax error");
 }
 
 RespValue CommandDispatcher::handle_get(const std::vector<std::string>& args, const Database& db) {
