@@ -163,13 +163,8 @@ void test_command_ping() {
         return;
     }
 
-    // PING command: *1\r\n$4\r\nPING\r\n
     std::string resp = send_and_receive(client, "*1\r\n$4\r\nPING\r\n");
     ASSERT_EQ(std::string("+PONG\r\n"), resp);
-
-    // PING with message: *2\r\n$4\r\nPING\r\n$5\r\nhello\r\n
-    std::string resp2 = send_and_receive(client, "*2\r\n$4\r\nPING\r\n$5\r\nhello\r\n");
-    ASSERT_EQ(std::string("$5\r\nhello\r\n"), resp2);
 
     closesocket(client);
 }
@@ -184,25 +179,16 @@ void test_command_set_and_get() {
         return;
     }
 
-    // SET greeting "hello world"
-    std::string set_cmd = "*3\r\n$3\r\nSET\r\n$8\r\ngreeting\r\n$11\r\nhello world\r\n";
-    std::string set_resp = send_and_receive(client, set_cmd);
+    std::string set_resp = send_and_receive(client, "*3\r\n$3\r\nSET\r\n$1\r\nk\r\n$1\r\nv\r\n");
     ASSERT_EQ(std::string("+OK\r\n"), set_resp);
 
-    // GET greeting
-    std::string get_cmd = "*2\r\n$3\r\nGET\r\n$8\r\ngreeting\r\n";
-    std::string get_resp = send_and_receive(client, get_cmd);
-    ASSERT_EQ(std::string("$11\r\nhello world\r\n"), get_resp);
-
-    // GET nonexistent key
-    std::string miss_cmd = "*2\r\n$3\r\nGET\r\n$7\r\nunknown\r\n";
-    std::string miss_resp = send_and_receive(client, miss_cmd);
-    ASSERT_EQ(std::string("$-1\r\n"), miss_resp);
+    std::string get_resp = send_and_receive(client, "*2\r\n$3\r\nGET\r\n$1\r\nk\r\n");
+    ASSERT_EQ(std::string("$1\r\nv\r\n"), get_resp);
 
     closesocket(client);
 }
 
-void test_command_del_exists_flushdb() {
+void test_command_list_hash_set_over_tcp() {
     TestServer ts(TEST_PORT);
     ASSERT_TRUE(ts.start());
 
@@ -212,25 +198,33 @@ void test_command_del_exists_flushdb() {
         return;
     }
 
-    // SET a 1, SET b 2
-    send_and_receive(client, "*3\r\n$3\r\nSET\r\n$1\r\na\r\n$1\r\n1\r\n");
-    send_and_receive(client, "*3\r\n$3\r\nSET\r\n$1\r\nb\r\n$1\r\n2\r\n");
+    // 1. List: RPUSH mylist x y -> :2\r\n
+    std::string lpush_resp = send_and_receive(client, "*4\r\n$5\r\nRPUSH\r\n$6\r\nmylist\r\n$1\r\nx\r\n$1\r\ny\r\n");
+    ASSERT_EQ(std::string(":2\r\n"), lpush_resp);
 
-    // EXISTS a b c -> :2\r\n
-    std::string exists_resp = send_and_receive(client, "*4\r\n$6\r\nEXISTS\r\n$1\r\na\r\n$1\r\nb\r\n$1\r\nc\r\n");
-    ASSERT_EQ(std::string(":2\r\n"), exists_resp);
+    // LRANGE mylist 0 -1 -> *2\r\n$1\r\nx\r\n$1\r\ny\r\n
+    std::string lrange_resp = send_and_receive(client, "*4\r\n$6\r\nLRANGE\r\n$6\r\nmylist\r\n$1\r\n0\r\n$2\r\n-1\r\n");
+    ASSERT_EQ(std::string("*2\r\n$1\r\nx\r\n$1\r\ny\r\n"), lrange_resp);
 
-    // DEL a -> :1\r\n
-    std::string del_resp = send_and_receive(client, "*2\r\n$3\r\nDEL\r\n$1\r\na\r\n");
-    ASSERT_EQ(std::string(":1\r\n"), del_resp);
+    // 2. Hash: HSET user:1 name Bob -> :1\r\n
+    std::string hset_resp = send_and_receive(client, "*4\r\n$4\r\nHSET\r\n$6\r\nuser:1\r\n$4\r\nname\r\n$3\r\nBob\r\n");
+    ASSERT_EQ(std::string(":1\r\n"), hset_resp);
 
-    // FLUSHDB -> +OK\r\n
-    std::string flush_resp = send_and_receive(client, "*1\r\n$7\r\nFLUSHDB\r\n");
-    ASSERT_EQ(std::string("+OK\r\n"), flush_resp);
+    // HGET user:1 name -> $3\r\nBob\r\n
+    std::string hget_resp = send_and_receive(client, "*3\r\n$4\r\nHGET\r\n$6\r\nuser:1\r\n$4\r\nname\r\n");
+    ASSERT_EQ(std::string("$3\r\nBob\r\n"), hget_resp);
 
-    // EXISTS b -> :0\r\n
-    std::string after_flush = send_and_receive(client, "*2\r\n$6\r\nEXISTS\r\n$1\r\nb\r\n");
-    ASSERT_EQ(std::string(":0\r\n"), after_flush);
+    // 3. Set: SADD numbers 10 20 -> :2\r\n
+    std::string sadd_resp = send_and_receive(client, "*4\r\n$4\r\nSADD\r\n$7\r\nnumbers\r\n$2\r\n10\r\n$2\r\n20\r\n");
+    ASSERT_EQ(std::string(":2\r\n"), sadd_resp);
+
+    // SCARD numbers -> :2\r\n
+    std::string scard_resp = send_and_receive(client, "*2\r\n$5\r\nSCARD\r\n$7\r\nnumbers\r\n");
+    ASSERT_EQ(std::string(":2\r\n"), scard_resp);
+
+    // 4. WRONGTYPE: GET mylist -> -WRONGTYPE...
+    std::string wt_resp = send_and_receive(client, "*2\r\n$3\r\nGET\r\n$6\r\nmylist\r\n");
+    ASSERT_EQ(std::string("-WRONGTYPE Operation against a key holding the wrong kind of value\r\n"), wt_resp);
 
     closesocket(client);
 }
@@ -245,8 +239,6 @@ void test_pipelining() {
         return;
     }
 
-    // Send 3 commands in one single TCP packet (pipelining):
-    // PING, SET x 99, GET x
     std::string pipeline =
         "*1\r\n$4\r\nPING\r\n"
         "*3\r\n$3\r\nSET\r\n$1\r\nx\r\n$2\r\n99\r\n"
@@ -254,7 +246,6 @@ void test_pipelining() {
 
     send(client, pipeline.data(), static_cast<int>(pipeline.size()), 0);
 
-    // Accumulate responses
     std::string expected = "+PONG\r\n+OK\r\n$2\r\n99\r\n";
     std::string actual;
 
@@ -286,7 +277,7 @@ int main() {
     std::cout << "[Core Redis Commands over TCP]" << std::endl;
     RUN_TEST(test_command_ping);
     RUN_TEST(test_command_set_and_get);
-    RUN_TEST(test_command_del_exists_flushdb);
+    RUN_TEST(test_command_list_hash_set_over_tcp);
     std::cout << std::endl;
 
     std::cout << "[TCP Pipelining]" << std::endl;

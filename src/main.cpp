@@ -1,9 +1,4 @@
 // main.cpp — Entry point for the mini-redis server.
-//
-// Milestone 4: The server is now fully operational!
-// It listens on port 6379, accepts Redis clients (such as redis-cli),
-// parses RESP commands, executes them against the in-memory Database,
-// and transmits valid RESP responses.
 
 #include "server.h"
 
@@ -21,7 +16,7 @@ void handle_shutdown(int /* signal */) {
 
 int main() {
     std::cout << "==========================================" << std::endl;
-    std::cout << "        mini-redis server v0.5.0          " << std::endl;
+    std::cout << "        mini-redis server v0.6.0          " << std::endl;
     std::cout << "==========================================" << std::endl;
     std::cout << std::endl;
 
@@ -40,18 +35,15 @@ int main() {
     std::cout << "    redis-cli -p 6379" << std::endl;
     std::cout << std::endl;
     std::cout << "Supported commands:" << std::endl;
-    std::cout << "    PING [message]" << std::endl;
-    std::cout << "    ECHO message" << std::endl;
-    std::cout << "    SET key value" << std::endl;
-    std::cout << "    GET key" << std::endl;
-    std::cout << "    DEL key [key ...]" << std::endl;
-    std::cout << "    EXISTS key [key ...]" << std::endl;
-    std::cout << "    FLUSHDB" << std::endl;
+    std::cout << "  Core:    PING, ECHO, DEL, EXISTS, FLUSHDB" << std::endl;
+    std::cout << "  Strings: SET, GET" << std::endl;
+    std::cout << "  Lists:   LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN" << std::endl;
+    std::cout << "  Hashes:  HSET, HGET, HDEL, HEXISTS, HGETALL" << std::endl;
+    std::cout << "  Sets:    SADD, SREM, SISMEMBER, SMEMBERS, SCARD" << std::endl;
     std::cout << std::endl;
     std::cout << "Press Ctrl+C to shut down." << std::endl;
     std::cout << std::endl;
 
-    // Start accept loop (blocks until stopped)
     server.run();
 
     std::cout << "Server shut down cleanly." << std::endl;

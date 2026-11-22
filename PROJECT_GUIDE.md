@@ -89,10 +89,10 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] PING, ECHO, SET, GET, DEL, EXISTS, FLUSHDB
 - [x] Test with redis-cli or custom client
 
-### Milestone 5: Additional Data Structures
-- [ ] Lists (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN)
-- [ ] Hashes (HSET, HGET, HDEL, HGETALL, HEXISTS)
-- [ ] Sets (SADD, SREM, SISMEMBER, SMEMBERS, SCARD)
+### Milestone 5: Additional Data Structures ✅
+- [x] Lists (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN)
+- [x] Hashes (HSET, HGET, HDEL, HGETALL, HEXISTS)
+- [x] Sets (SADD, SREM, SISMEMBER, SMEMBERS, SCARD)
 
 ### Milestone 6: Expiration & TTL
 - [ ] EXPIRE, TTL, PTTL
@@ -149,6 +149,6 @@ None yet — project is in initial setup phase.
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — Milestone 4 files ready for commit.
-- **Build status:** ✅ Compiles and runs successfully. All 73 tests pass (21 database + 28 RESP + 18 command + 6 server).
-- **Next task:** Commit Milestone 4, then begin Milestone 5 (Additional Data Structures: Lists, Hashes, Sets).
+- **Last verified commit:** Pending — Milestone 5 files ready for commit.
+- **Build status:** ✅ Compiles and runs successfully. All 74 tests pass (28 database + 28 RESP + 12 command + 6 server).
+- **Next task:** Commit Milestone 5, then begin Milestone 6 (Expiration & TTL).

@@ -6,7 +6,7 @@ This is a learning project — every component (networking, protocol parsing, da
 
 ## Current Status
 
-🚧 **Milestone 4: Core Command Compatibility** — Fully functional Redis server compatible with `redis-cli` (PING, ECHO, SET, GET, DEL, EXISTS, FLUSHDB).
+🚧 **Milestone 5: Additional Data Structures** — Strings, Lists (LPUSH/RPUSH/LPOP/RPOP/LRANGE/LLEN), Hashes (HSET/HGET/HDEL/HEXISTS/HGETALL), and Sets (SADD/SREM/SISMEMBER/SMEMBERS/SCARD).
 
 ## Prerequisites
 
@@ -60,7 +60,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Milestone 2: TCP networking with Winsock2
 - [x] Milestone 3: RESP protocol parser & encoder
 - [x] Milestone 4: Core Redis command compatibility
-- [ ] Milestone 5: Additional data structures (lists, hashes, sets)
+- [x] Milestone 5: Additional data structures (lists, hashes, sets)
 - [ ] Milestone 6: Key expiration & TTL
 - [ ] Milestone 7: Persistence (snapshots, append-only log)
 - [ ] Milestone 8: Multiple clients & concurrency

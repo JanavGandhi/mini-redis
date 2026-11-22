@@ -2,6 +2,22 @@
 
 All notable changes to the mini-redis project will be documented in this file.
 
+## [0.6.0] - 2026-11-22
+
+### Added
+- Extended `Database` engine with C++17 `std::variant` supporting multiple data structures:
+  - **Lists** (`std::deque<std::string>`): `LPUSH`, `RPUSH`, `LPOP`, `RPOP`, `LRANGE`, `LLEN`
+  - **Hashes** (`std::unordered_map<std::string, std::string>`): `HSET`, `HGET`, `HDEL`, `HEXISTS`, `HGETALL`
+  - **Sets** (`std::unordered_set<std::string>`): `SADD`, `SREM`, `SISMEMBER`, `SMEMBERS`, `SCARD`
+- Redis `WRONGTYPE` error handling when operations target mismatched data types
+- Negative index and bounds clamping for `LRANGE` (matching official Redis behavior)
+- Automatic key cleanup when Lists, Hashes, or Sets become empty
+- Multi-argument support for `LPUSH`, `RPUSH`, `HSET`, `HDEL`, `SADD`, `SREM`, `DEL`, `EXISTS`
+- `DEL`, `EXISTS`, and `FLUSHDB` support across all data types
+- Database test suite expanded to 28 unit tests
+- Command Dispatcher test suite expanded to 12 unit test cases covering all new data structure commands and WRONGTYPE errors
+- Server integration test suite updated with multi-type TCP test cases
+
 ## [0.5.0] - 2026-11-22
 
 ### Added

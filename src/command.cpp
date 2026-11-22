@@ -4,15 +4,30 @@
 
 #include <algorithm>  // std::transform
 #include <cctype>     // std::toupper
+#include <charconv>   // std::from_chars
 
 namespace {
 
-// Helper: convert string to uppercase for case-insensitive matching.
 std::string to_upper(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
         return static_cast<char>(std::toupper(c));
     });
     return s;
+}
+
+const char* WRONG_TYPE_MSG = "WRONGTYPE Operation against a key holding the wrong kind of value";
+
+bool parse_int64_arg(const std::string& str, int64_t& out) {
+    if (str.empty()) return false;
+    std::string_view sv = str;
+    if (sv[0] == '+') {
+        sv.remove_prefix(1);
+        if (sv.empty()) return false;
+    }
+    const char* first = sv.data();
+    const char* last = sv.data() + sv.size();
+    auto [ptr, ec] = std::from_chars(first, last, out);
+    return (ec == std::errc{} && ptr == last);
 }
 
 } // anonymous namespace
@@ -31,35 +46,47 @@ RespValue CommandDispatcher::execute_args(const std::vector<std::string>& args, 
         return RespValue::make_error("ERR empty command");
     }
 
-    std::string cmd_name = to_upper(args[0]);
+    std::string cmd = to_upper(args[0]);
 
-    if (cmd_name == "PING") {
-        return handle_ping(args);
-    } else if (cmd_name == "ECHO") {
-        return handle_echo(args);
-    } else if (cmd_name == "SET") {
-        return handle_set(args, db);
-    } else if (cmd_name == "GET") {
-        return handle_get(args, db);
-    } else if (cmd_name == "DEL") {
-        return handle_del(args, db);
-    } else if (cmd_name == "EXISTS") {
-        return handle_exists(args, db);
-    } else if (cmd_name == "FLUSHDB") {
-        return handle_flushdb(args, db);
-    } else if (cmd_name == "COMMAND") {
-        // Modern redis-cli sends "COMMAND" or "COMMAND DOCS" on connection.
-        // Returning an empty array is the standard minimal response.
-        return handle_command(args);
-    }
+    // Core / Generic
+    if (cmd == "PING")      return handle_ping(args);
+    if (cmd == "ECHO")      return handle_echo(args);
+    if (cmd == "FLUSHDB")   return handle_flushdb(args, db);
+    if (cmd == "COMMAND")   return handle_command(args);
+    if (cmd == "DEL")       return handle_del(args, db);
+    if (cmd == "EXISTS")    return handle_exists(args, db);
+
+    // String
+    if (cmd == "SET")       return handle_set(args, db);
+    if (cmd == "GET")       return handle_get(args, db);
+
+    // List
+    if (cmd == "LPUSH")     return handle_lpush(args, db);
+    if (cmd == "RPUSH")     return handle_rpush(args, db);
+    if (cmd == "LPOP")      return handle_lpop(args, db);
+    if (cmd == "RPOP")      return handle_rpop(args, db);
+    if (cmd == "LLEN")      return handle_llen(args, db);
+    if (cmd == "LRANGE")    return handle_lrange(args, db);
+
+    // Hash
+    if (cmd == "HSET")      return handle_hset(args, db);
+    if (cmd == "HGET")      return handle_hget(args, db);
+    if (cmd == "HDEL")      return handle_hdel(args, db);
+    if (cmd == "HEXISTS")   return handle_hexists(args, db);
+    if (cmd == "HGETALL")   return handle_hgetall(args, db);
+
+    // Set
+    if (cmd == "SADD")      return handle_sadd(args, db);
+    if (cmd == "SREM")      return handle_srem(args, db);
+    if (cmd == "SISMEMBER") return handle_sismember(args, db);
+    if (cmd == "SMEMBERS")  return handle_smembers(args, db);
+    if (cmd == "SCARD")     return handle_scard(args, db);
 
     return RespValue::make_error("ERR unknown command '" + args[0] + "'");
 }
 
-// ─── Command Handlers ────────────────────────────────────────────────────────
+// ─── Core / Generic Handlers ─────────────────────────────────────────────────
 
-// PING [message]
-// Returns +PONG\r\n if no args, or bulk string message if provided.
 RespValue CommandDispatcher::handle_ping(const std::vector<std::string>& args) {
     if (args.size() == 1) {
         return RespValue::make_simple_string("PONG");
@@ -69,8 +96,6 @@ RespValue CommandDispatcher::handle_ping(const std::vector<std::string>& args) {
     return RespValue::make_error("ERR wrong number of arguments for 'ping' command");
 }
 
-// ECHO message
-// Returns bulk string message.
 RespValue CommandDispatcher::handle_echo(const std::vector<std::string>& args) {
     if (args.size() != 2) {
         return RespValue::make_error("ERR wrong number of arguments for 'echo' command");
@@ -78,31 +103,18 @@ RespValue CommandDispatcher::handle_echo(const std::vector<std::string>& args) {
     return RespValue::make_bulk_string(args[1]);
 }
 
-// SET key value
-// Stores value and returns +OK\r\n.
-RespValue CommandDispatcher::handle_set(const std::vector<std::string>& args, Database& db) {
-    if (args.size() != 3) {
-        return RespValue::make_error("ERR wrong number of arguments for 'set' command");
+RespValue CommandDispatcher::handle_flushdb(const std::vector<std::string>& args, Database& db) {
+    if (args.size() != 1) {
+        return RespValue::make_error("ERR wrong number of arguments for 'flushdb' command");
     }
-    db.set(args[1], args[2]);
+    db.flushdb();
     return RespValue::make_simple_string("OK");
 }
 
-// GET key
-// Returns bulk string if found, or null bulk string ($-1\r\n) if not found.
-RespValue CommandDispatcher::handle_get(const std::vector<std::string>& args, const Database& db) {
-    if (args.size() != 2) {
-        return RespValue::make_error("ERR wrong number of arguments for 'get' command");
-    }
-    auto val = db.get(args[1]);
-    if (!val.has_value()) {
-        return RespValue::make_null_bulk_string();
-    }
-    return RespValue::make_bulk_string(val.value());
+RespValue CommandDispatcher::handle_command(const std::vector<std::string>& /* args */) {
+    return RespValue::make_array({});
 }
 
-// DEL key [key ...]
-// Deletes keys and returns integer count of keys actually removed.
 RespValue CommandDispatcher::handle_del(const std::vector<std::string>& args, Database& db) {
     if (args.size() < 2) {
         return RespValue::make_error("ERR wrong number of arguments for 'del' command");
@@ -112,8 +124,6 @@ RespValue CommandDispatcher::handle_del(const std::vector<std::string>& args, Da
     return RespValue::make_integer(static_cast<int64_t>(removed));
 }
 
-// EXISTS key [key ...]
-// Returns integer count of existing keys (duplicates in query counted multiple times).
 RespValue CommandDispatcher::handle_exists(const std::vector<std::string>& args, const Database& db) {
     if (args.size() < 2) {
         return RespValue::make_error("ERR wrong number of arguments for 'exists' command");
@@ -123,18 +133,253 @@ RespValue CommandDispatcher::handle_exists(const std::vector<std::string>& args,
     return RespValue::make_integer(static_cast<int64_t>(count));
 }
 
-// FLUSHDB
-// Clears database and returns +OK\r\n.
-RespValue CommandDispatcher::handle_flushdb(const std::vector<std::string>& args, Database& db) {
-    if (args.size() != 1) {
-        return RespValue::make_error("ERR wrong number of arguments for 'flushdb' command");
+// ─── String Handlers ─────────────────────────────────────────────────────────
+
+RespValue CommandDispatcher::handle_set(const std::vector<std::string>& args, Database& db) {
+    if (args.size() != 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'set' command");
     }
-    db.flushdb();
+    db.set(args[1], args[2]);
     return RespValue::make_simple_string("OK");
 }
 
-// COMMAND [DOCS]
-// Returns empty array for redis-cli compatibility.
-RespValue CommandDispatcher::handle_command(const std::vector<std::string>& /* args */) {
-    return RespValue::make_array({});
+RespValue CommandDispatcher::handle_get(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'get' command");
+    }
+    auto res = db.get(args[1]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    if (!res.value.has_value()) {
+        return RespValue::make_null_bulk_string();
+    }
+    return RespValue::make_bulk_string(res.value.value());
+}
+
+// ─── List Handlers ───────────────────────────────────────────────────────────
+
+RespValue CommandDispatcher::handle_lpush(const std::vector<std::string>& args, Database& db) {
+    if (args.size() < 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'lpush' command");
+    }
+    std::vector<std::string> values(args.begin() + 2, args.end());
+    auto res = db.lpush(args[1], values);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(static_cast<int64_t>(res.value));
+}
+
+RespValue CommandDispatcher::handle_rpush(const std::vector<std::string>& args, Database& db) {
+    if (args.size() < 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'rpush' command");
+    }
+    std::vector<std::string> values(args.begin() + 2, args.end());
+    auto res = db.rpush(args[1], values);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(static_cast<int64_t>(res.value));
+}
+
+RespValue CommandDispatcher::handle_lpop(const std::vector<std::string>& args, Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'lpop' command");
+    }
+    auto res = db.lpop(args[1]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    if (!res.value.has_value()) {
+        return RespValue::make_null_bulk_string();
+    }
+    return RespValue::make_bulk_string(res.value.value());
+}
+
+RespValue CommandDispatcher::handle_rpop(const std::vector<std::string>& args, Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'rpop' command");
+    }
+    auto res = db.rpop(args[1]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    if (!res.value.has_value()) {
+        return RespValue::make_null_bulk_string();
+    }
+    return RespValue::make_bulk_string(res.value.value());
+}
+
+RespValue CommandDispatcher::handle_llen(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'llen' command");
+    }
+    auto res = db.llen(args[1]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(static_cast<int64_t>(res.value));
+}
+
+RespValue CommandDispatcher::handle_lrange(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 4) {
+        return RespValue::make_error("ERR wrong number of arguments for 'lrange' command");
+    }
+    int64_t start = 0;
+    int64_t stop = 0;
+    if (!parse_int64_arg(args[2], start) || !parse_int64_arg(args[3], stop)) {
+        return RespValue::make_error("ERR value is not an integer or out of range");
+    }
+
+    auto res = db.lrange(args[1], start, stop);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+
+    std::vector<RespValue> items;
+    items.reserve(res.value.size());
+    for (const auto& elem : res.value) {
+        items.push_back(RespValue::make_bulk_string(elem));
+    }
+    return RespValue::make_array(items);
+}
+
+// ─── Hash Handlers ───────────────────────────────────────────────────────────
+
+RespValue CommandDispatcher::handle_hset(const std::vector<std::string>& args, Database& db) {
+    if (args.size() < 4 || (args.size() % 2 != 0)) {
+        return RespValue::make_error("ERR wrong number of arguments for 'hset' command");
+    }
+
+    std::vector<std::pair<std::string, std::string>> field_values;
+    for (std::size_t i = 2; i < args.size(); i += 2) {
+        field_values.emplace_back(args[i], args[i + 1]);
+    }
+
+    auto res = db.hset(args[1], field_values);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(static_cast<int64_t>(res.value));
+}
+
+RespValue CommandDispatcher::handle_hget(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'hget' command");
+    }
+    auto res = db.hget(args[1], args[2]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    if (!res.value.has_value()) {
+        return RespValue::make_null_bulk_string();
+    }
+    return RespValue::make_bulk_string(res.value.value());
+}
+
+RespValue CommandDispatcher::handle_hdel(const std::vector<std::string>& args, Database& db) {
+    if (args.size() < 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'hdel' command");
+    }
+    std::vector<std::string> fields(args.begin() + 2, args.end());
+    auto res = db.hdel(args[1], fields);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(static_cast<int64_t>(res.value));
+}
+
+RespValue CommandDispatcher::handle_hexists(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'hexists' command");
+    }
+    auto res = db.hexists(args[1], args[2]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(res.value ? 1 : 0);
+}
+
+RespValue CommandDispatcher::handle_hgetall(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'hgetall' command");
+    }
+    auto res = db.hgetall(args[1]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+
+    std::vector<RespValue> items;
+    items.reserve(res.value.size() * 2);
+    for (const auto& [f, v] : res.value) {
+        items.push_back(RespValue::make_bulk_string(f));
+        items.push_back(RespValue::make_bulk_string(v));
+    }
+    return RespValue::make_array(items);
+}
+
+// ─── Set Handlers ────────────────────────────────────────────────────────────
+
+RespValue CommandDispatcher::handle_sadd(const std::vector<std::string>& args, Database& db) {
+    if (args.size() < 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'sadd' command");
+    }
+    std::vector<std::string> members(args.begin() + 2, args.end());
+    auto res = db.sadd(args[1], members);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(static_cast<int64_t>(res.value));
+}
+
+RespValue CommandDispatcher::handle_srem(const std::vector<std::string>& args, Database& db) {
+    if (args.size() < 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'srem' command");
+    }
+    std::vector<std::string> members(args.begin() + 2, args.end());
+    auto res = db.srem(args[1], members);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(static_cast<int64_t>(res.value));
+}
+
+RespValue CommandDispatcher::handle_sismember(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 3) {
+        return RespValue::make_error("ERR wrong number of arguments for 'sismember' command");
+    }
+    auto res = db.sismember(args[1], args[2]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(res.value ? 1 : 0);
+}
+
+RespValue CommandDispatcher::handle_smembers(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'smembers' command");
+    }
+    auto res = db.smembers(args[1]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+
+    std::vector<RespValue> items;
+    items.reserve(res.value.size());
+    for (const auto& m : res.value) {
+        items.push_back(RespValue::make_bulk_string(m));
+    }
+    return RespValue::make_array(items);
+}
+
+RespValue CommandDispatcher::handle_scard(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 2) {
+        return RespValue::make_error("ERR wrong number of arguments for 'scard' command");
+    }
+    auto res = db.scard(args[1]);
+    if (res.wrong_type) {
+        return RespValue::make_error(WRONG_TYPE_MSG);
+    }
+    return RespValue::make_integer(static_cast<int64_t>(res.value));
 }
