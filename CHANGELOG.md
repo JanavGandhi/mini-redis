@@ -2,6 +2,23 @@
 
 All notable changes to the mini-redis project will be documented in this file.
 
+## [0.4.0] - 2026-11-22
+
+### Added
+- `RespValue`, `RespEncoder`, and `RespParser` classes (`src/resp.h`, `src/resp.cpp`)
+- Full RESP2 protocol parsing and encoding:
+  - Simple Strings (`+`)
+  - Simple Errors (`-`)
+  - Integers (`:`)
+  - Bulk Strings (`$`) including empty, null (`$-1\r\n`), and binary payloads with embedded CRLF
+  - Arrays (`*`) including empty (`*0\r\n`), null (`*-1\r\n`), and arbitrarily nested arrays
+- Streaming parser with `append()` and `parse_next()` handling fragmented TCP input
+- Helper `to_string_vector()` to convert command arrays to string arguments for dispatching
+- Validation rejecting malformed lengths, counts, characters, and prefixes
+- Comprehensive RESP unit test suite (`tests/resp_test.cpp`) — 28 unit tests covering
+  all 5 data types, byte-by-byte streaming fragmentation, pipelined batches, encoding, and roundtrip serialization
+- Added `mini-redis-resp-tests` executable target in `CMakeLists.txt`
+
 ## [0.3.0] - 2026-11-21
 
 ### Added

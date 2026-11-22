@@ -78,11 +78,11 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Send and receive raw bytes
 - [x] Proper socket cleanup and error handling
 
-### Milestone 3: RESP Protocol
-- [ ] Parse RESP arrays and bulk strings
-- [ ] Handle fragmented TCP input
-- [ ] Encode responses (simple strings, errors, integers, bulk strings, arrays)
-- [ ] Validate and reject malformed input
+### Milestone 3: RESP Protocol ✅
+- [x] Parse RESP arrays and bulk strings
+- [x] Handle fragmented TCP input
+- [x] Encode responses (simple strings, errors, integers, bulk strings, arrays)
+- [x] Validate and reject malformed input
 
 ### Milestone 4: Core Command Compatibility
 - [ ] Integrate networking + parsing + database
@@ -149,6 +149,6 @@ None yet — project is in initial setup phase.
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — Milestone 2 files ready for commit.
-- **Build status:** ✅ Compiles and runs successfully. All 27 tests pass (21 database + 6 server).
-- **Next task:** Commit Milestone 2, then begin Milestone 3 (RESP Protocol).
+- **Last verified commit:** Pending — Milestone 3 files ready for commit.
+- **Build status:** ✅ Compiles and runs successfully. All 55 tests pass (21 database + 6 server + 28 RESP).
+- **Next task:** Commit Milestone 3, then begin Milestone 4 (Core Command Compatibility).

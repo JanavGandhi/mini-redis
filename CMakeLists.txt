@@ -27,13 +27,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 # ─── Core Library ────────────────────────────────────────────────────────────
-# Build the core logic (database + networking) as a static library so both
-# the server executable and test executables can link against it without
-# compiling the same source files twice.
+# Build the core logic (database + networking + RESP protocol) as a static
+# library so both the server executable and test executables can link against it
+# without compiling the same source files twice.
 
 add_library(mini-redis-lib STATIC
     src/database.cpp
     src/server.cpp
+    src/resp.cpp
 )
 
 # Let any target that links mini-redis-lib use #include "database.h" etc.
@@ -54,7 +55,7 @@ add_executable(mini-redis
     src/main.cpp
 )
 
-# Link the core library so main.cpp can use Database, Server, etc.
+# Link the core library so main.cpp can use Database, Server, Resp, etc.
 target_link_libraries(mini-redis PRIVATE mini-redis-lib)
 
 # ─── Test Executables ────────────────────────────────────────────────────────
@@ -72,3 +73,9 @@ add_executable(mini-redis-server-tests
     tests/server_test.cpp
 )
 target_link_libraries(mini-redis-server-tests PRIVATE mini-redis-lib)
+
+# RESP protocol unit tests.
+add_executable(mini-redis-resp-tests
+    tests/resp_test.cpp
+)
+target_link_libraries(mini-redis-resp-tests PRIVATE mini-redis-lib)
