@@ -16,6 +16,7 @@
 #include <ws2tcpip.h>
 
 #include "database.h"
+#include "persistence.h"
 
 #include <atomic>
 #include <cstdint>
@@ -34,6 +35,10 @@ public:
 
     Server(const Server&) = delete;
     Server& operator=(const Server&) = delete;
+
+    // Enable Append-Only File (AOF) persistence.
+    // If the file already exists on start(), its commands will be replayed.
+    void enable_aof(const std::string& aof_path);
 
     // Initialize Winsock, bind socket, and listen on port.
     bool start();
@@ -56,6 +61,8 @@ private:
     std::atomic<SOCKET> client_socket_;
     std::atomic<bool> running_;
     bool winsock_initialized_;
+    AofManager aof_;
+    std::string aof_path_;
 
     // Handle a client connection: parse RESP commands, execute, and send responses.
     void handle_client(SOCKET client_socket);

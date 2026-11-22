@@ -34,7 +34,17 @@ Server::~Server() {
     }
 }
 
+void Server::enable_aof(const std::string& aof_path) {
+    aof_path_ = aof_path;
+}
+
 bool Server::start() {
+    if (!aof_path_.empty()) {
+        std::cout << "Replaying AOF log from " << aof_path_ << "..." << std::endl;
+        AofManager::replay(aof_path_, db_);
+        aof_.open(aof_path_);
+    }
+
     WSADATA wsa_data;
     int result = WSAStartup(MAKEWORD(2, 2), &wsa_data);
     if (result != 0) {
@@ -159,6 +169,11 @@ void Server::handle_client(SOCKET client_socket) {
                 if (status == ParseStatus::Ok) {
                     // Dispatch command against Database
                     RespValue response = CommandDispatcher::execute(cmd, db_);
+
+                    if (aof_.is_open() && !response.is_error()) {
+                        aof_.append(cmd);
+                    }
+
                     std::string response_bytes = response.serialize();
 
                     if (!send_all(client_socket, response_bytes.data(),

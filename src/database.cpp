@@ -152,6 +152,28 @@ std::size_t Database::purge_expired() {
     return purged;
 }
 
+std::vector<Database::SnapshotEntry> Database::export_snapshot() const {
+    const_cast<Database*>(this)->purge_expired();
+    std::vector<SnapshotEntry> result;
+    result.reserve(store_.size());
+    for (const auto& [k, v] : store_) {
+        int64_t ms = pttl(k);
+        result.push_back({k, ms, v});
+    }
+    return result;
+}
+
+void Database::import_snapshot(const std::vector<SnapshotEntry>& entries) {
+    flushdb();
+    auto now = std::chrono::steady_clock::now();
+    for (const auto& entry : entries) {
+        store_[entry.key] = entry.value;
+        if (entry.ttl_ms > 0) {
+            expires_[entry.key] = now + std::chrono::milliseconds(entry.ttl_ms);
+        }
+    }
+}
+
 // ─── String Operations ───────────────────────────────────────────────────────
 
 void Database::set(const std::string& key, const std::string& value, int64_t ttl_ms) {

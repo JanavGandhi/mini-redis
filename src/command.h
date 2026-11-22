@@ -31,6 +31,11 @@ private:
     static RespValue handle_ttl(const std::vector<std::string>& args, const Database& db);
     static RespValue handle_pttl(const std::vector<std::string>& args, const Database& db);
 
+    // Persistence commands (Milestone 7)
+    static RespValue handle_save(const std::vector<std::string>& args, const Database& db);
+    static RespValue handle_bgsave(const std::vector<std::string>& args, const Database& db);
+    static RespValue handle_lastsave(const std::vector<std::string>& args);
+
     // String commands (with EX / PX options)
     static RespValue handle_set(const std::vector<std::string>& args, Database& db);
     static RespValue handle_get(const std::vector<std::string>& args, const Database& db);

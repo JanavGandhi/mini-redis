@@ -2,6 +2,25 @@
 
 All notable changes to the mini-redis project will be documented in this file.
 
+## [0.8.0] - 2026-11-22
+
+### Added
+- Snapshot (RDB) persistence engine (`SnapshotManager` in `src/persistence.h`, `src/persistence.cpp`):
+  - Binary serialization format with magic header, versioning, and length prefixes
+  - Complete support for Strings, Lists, Hashes, Sets, and remaining TTLs
+  - Binary-safe storage handling embedded null bytes and CRLF
+- Append-Only File (`AofManager` in `src/persistence.h`, `src/persistence.cpp`):
+  - Streams mutating commands to disk in standard RESP wire format
+  - Crash recovery replaying AOF logs on server startup
+  - AOF rewrite / compaction compressing state into minimal equivalent commands
+- Persistence commands:
+  - `SAVE`: Synchronously writes snapshot to `dump.rdb`
+  - `BGSAVE`: Asynchronously saves snapshot in a detached background thread
+  - `LASTSAVE`: Returns UNIX timestamp of the last successful save
+- Persistence unit test suite (`tests/persistence_test.cpp`) — 6 tests covering
+  RDB save/load, binary safety, corrupt file rejection, AOF replay recovery, AOF compaction, and commands
+- Added `mini-redis-persistence-tests` target in `CMakeLists.txt`
+
 ## [0.7.0] - 2026-11-22
 
 ### Added

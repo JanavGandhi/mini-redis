@@ -99,10 +99,10 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] SET with EX/PX options
 - [x] Lazy and periodic expiration
 
-### Milestone 7: Persistence
-- [ ] Snapshot save/load
-- [ ] Append-only log
-- [ ] Crash recovery
+### Milestone 7: Persistence ✅
+- [x] Snapshot save/load
+- [x] Append-only log
+- [x] Crash recovery
 
 ### Milestone 8: Multiple Clients
 - [ ] Non-blocking I/O
@@ -149,6 +149,6 @@ None yet — project is in initial setup phase.
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — Milestone 6 files ready for commit.
-- **Build status:** ✅ Compiles and runs successfully. All 81 tests pass (33 database + 28 RESP + 13 command + 7 server).
-- **Next task:** Commit Milestone 6, then begin Milestone 7 (Persistence: Snapshots & Append-Only Log).
+- **Last verified commit:** Pending — Milestone 7 files ready for commit.
+- **Build status:** ✅ Compiles and runs successfully. All 87 tests pass (33 database + 28 RESP + 13 command + 7 server + 6 persistence).
+- **Next task:** Commit Milestone 7, then begin Milestone 8 (Multiple Clients & Concurrency).

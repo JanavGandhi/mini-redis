@@ -1,12 +1,18 @@
 // command.cpp — Implementation of command dispatching and handlers.
 
 #include "command.h"
+#include "persistence.h"
 
 #include <algorithm>  // std::transform
+#include <atomic>     // std::atomic
 #include <cctype>     // std::toupper
 #include <charconv>   // std::from_chars
+#include <ctime>      // std::time
+#include <thread>     // std::thread
 
 namespace {
+
+static std::atomic<int64_t> s_last_save_time{0};
 
 std::string to_upper(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
@@ -61,6 +67,11 @@ RespValue CommandDispatcher::execute_args(const std::vector<std::string>& args, 
     if (cmd == "PEXPIRE")   return handle_pexpire(args, db);
     if (cmd == "TTL")       return handle_ttl(args, db);
     if (cmd == "PTTL")      return handle_pttl(args, db);
+
+    // Persistence (Milestone 7)
+    if (cmd == "SAVE")      return handle_save(args, db);
+    if (cmd == "BGSAVE")    return handle_bgsave(args, db);
+    if (cmd == "LASTSAVE")  return handle_lastsave(args);
 
     // String (with EX/PX)
     if (cmd == "SET")       return handle_set(args, db);
@@ -179,6 +190,49 @@ RespValue CommandDispatcher::handle_pttl(const std::vector<std::string>& args, c
     }
     int64_t val = db.pttl(args[1]);
     return RespValue::make_integer(val);
+}
+
+// ─── Persistence Handlers (Milestone 7) ──────────────────────────────────────
+
+RespValue CommandDispatcher::handle_save(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 1) {
+        return RespValue::make_error("ERR wrong number of arguments for 'save' command");
+    }
+    if (SnapshotManager::save("dump.rdb", db)) {
+        s_last_save_time.store(std::time(nullptr));
+        return RespValue::make_simple_string("OK");
+    }
+    return RespValue::make_error("ERR failed to save snapshot");
+}
+
+RespValue CommandDispatcher::handle_bgsave(const std::vector<std::string>& args, const Database& db) {
+    if (args.size() != 1) {
+        return RespValue::make_error("ERR wrong number of arguments for 'bgsave' command");
+    }
+
+    // Export current snapshot state before spawning thread to avoid concurrency issues
+    auto snapshot_data = db.export_snapshot();
+
+    std::thread([data = std::move(snapshot_data)]() {
+        Database temp_db;
+        temp_db.import_snapshot(data);
+        if (SnapshotManager::save("dump.rdb", temp_db)) {
+            s_last_save_time.store(std::time(nullptr));
+        }
+    }).detach();
+
+    return RespValue::make_simple_string("Background saving started");
+}
+
+RespValue CommandDispatcher::handle_lastsave(const std::vector<std::string>& args) {
+    if (args.size() != 1) {
+        return RespValue::make_error("ERR wrong number of arguments for 'lastsave' command");
+    }
+    int64_t t = s_last_save_time.load();
+    if (t == 0) {
+        t = std::time(nullptr);
+    }
+    return RespValue::make_integer(t);
 }
 
 // ─── String Handlers (with EX/PX) ───────────────────────────────────────────

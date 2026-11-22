@@ -27,7 +27,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 # ─── Core Library ────────────────────────────────────────────────────────────
-# Build the core logic (database + networking + RESP protocol + command dispatcher)
+# Build the core logic (database + networking + RESP protocol + command dispatcher + persistence)
 # as a static library so both the server executable and test executables can link
 # against it without compiling the same source files twice.
 
@@ -36,6 +36,7 @@ add_library(mini-redis-lib STATIC
     src/server.cpp
     src/resp.cpp
     src/command.cpp
+    src/persistence.cpp
 )
 
 # Let any target that links mini-redis-lib use #include "database.h" etc.
@@ -86,3 +87,9 @@ add_executable(mini-redis-command-tests
     tests/command_test.cpp
 )
 target_link_libraries(mini-redis-command-tests PRIVATE mini-redis-lib)
+
+# Persistence unit tests.
+add_executable(mini-redis-persistence-tests
+    tests/persistence_test.cpp
+)
+target_link_libraries(mini-redis-persistence-tests PRIVATE mini-redis-lib)

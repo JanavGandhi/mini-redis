@@ -104,6 +104,23 @@ public:
     // Returns count of expired keys purged.
     std::size_t purge_expired();
 
+    // ── Snapshot Export / Import (Milestone 7) ──────────────────────────────
+    using ValueVariant = std::variant<
+        std::string,                                    // String
+        std::deque<std::string>,                        // List
+        std::unordered_map<std::string, std::string>,   // Hash
+        std::unordered_set<std::string>                 // Set
+    >;
+
+    struct SnapshotEntry {
+        std::string key;
+        int64_t ttl_ms = -1; // -1 if no TTL
+        ValueVariant value;
+    };
+
+    std::vector<SnapshotEntry> export_snapshot() const;
+    void import_snapshot(const std::vector<SnapshotEntry>& entries);
+
     // ── String Operations ───────────────────────────────────────────────────
     // SET: stores value. If ttl_ms > 0, sets expiration; if ttl_ms == 0, clears any prior expiration.
     void set(const std::string& key, const std::string& value, int64_t ttl_ms = 0);
@@ -132,13 +149,6 @@ public:
     DbResult<std::size_t> scard(const std::string& key) const;
 
 private:
-    using ValueVariant = std::variant<
-        std::string,                                    // String
-        std::deque<std::string>,                        // List
-        std::unordered_map<std::string, std::string>,   // Hash
-        std::unordered_set<std::string>                 // Set
-    >;
-
     // Lazy expiration helper: checks if key is expired. If expired, deletes it
     // and returns true. If not expired or no expiration, returns false.
     // Mutable allows lazy deletion inside const methods (e.g. get, exists).

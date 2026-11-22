@@ -6,7 +6,7 @@ This is a learning project — every component (networking, protocol parsing, da
 
 ## Current Status
 
-🚧 **Milestone 6: Expiration & TTL** — Full TTL tracking, EXPIRE/PEXPIRE, TTL/PTTL, SET EX/PX, and lazy & periodic key expiration.
+🚧 **Milestone 7: Persistence** — RDB binary snapshots (SAVE/BGSAVE/LASTSAVE), Append-Only File (AOF) with crash recovery & compaction.
 
 ## Prerequisites
 
@@ -62,7 +62,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Milestone 4: Core Redis command compatibility
 - [x] Milestone 5: Additional data structures (lists, hashes, sets)
 - [x] Milestone 6: Key expiration & TTL
-- [ ] Milestone 7: Persistence (snapshots, append-only log)
+- [x] Milestone 7: Persistence (snapshots, append-only log)
 - [ ] Milestone 8: Multiple clients & concurrency
 - [ ] Milestone 9: Reliability & performance
 
