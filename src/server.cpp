@@ -1,8 +1,7 @@
-// server.cpp — TCP server implementation using Winsock2.
+// server.cpp — Implementation of non-blocking multiplexed TCP server.
 
 #include "server.h"
 #include "command.h"
-#include "resp.h"
 
 #include <iostream>
 
@@ -11,7 +10,6 @@ Server::Server(uint16_t port)
     , internal_db_()
     , db_(internal_db_)
     , listen_socket_(INVALID_SOCKET)
-    , client_socket_(INVALID_SOCKET)
     , running_(false)
     , winsock_initialized_(false) {
 }
@@ -21,7 +19,6 @@ Server::Server(uint16_t port, Database& db)
     , internal_db_()
     , db_(db)
     , listen_socket_(INVALID_SOCKET)
-    , client_socket_(INVALID_SOCKET)
     , running_(false)
     , winsock_initialized_(false) {
 }
@@ -36,6 +33,15 @@ Server::~Server() {
 
 void Server::enable_aof(const std::string& aof_path) {
     aof_path_ = aof_path;
+}
+
+bool Server::set_non_blocking(SOCKET sock) {
+    u_long mode = 1;
+    if (ioctlsocket(sock, FIONBIO, &mode) != 0) {
+        log_error("ioctlsocket (FIONBIO)");
+        return false;
+    }
+    return true;
 }
 
 bool Server::start() {
@@ -63,6 +69,13 @@ bool Server::start() {
     setsockopt(listen_socket_, SOL_SOCKET, SO_REUSEADDR,
                reinterpret_cast<const char*>(&opt_val), sizeof(opt_val));
 
+    // Set listening socket to non-blocking
+    if (!set_non_blocking(listen_socket_)) {
+        closesocket(listen_socket_);
+        listen_socket_ = INVALID_SOCKET;
+        return false;
+    }
+
     sockaddr_in server_addr{};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;
@@ -83,7 +96,7 @@ bool Server::start() {
         return false;
     }
 
-    std::cout << "Server listening on port " << port_ << std::endl;
+    std::cout << "Server listening on port " << port_ << " (non-blocking I/O multiplexing)" << std::endl;
     return true;
 }
 
@@ -91,48 +104,196 @@ void Server::run() {
     running_ = true;
 
     while (running_) {
+        fd_set read_fds;
+        fd_set write_fds;
+        FD_ZERO(&read_fds);
+        FD_ZERO(&write_fds);
+
+        // Monitor listening socket for incoming client connections
+        FD_SET(listen_socket_, &read_fds);
+
+        // Monitor all connected clients for reads and pending writes
+        for (const auto& [sock, client] : clients_) {
+            FD_SET(sock, &read_fds);
+            if (!client.send_buffer.empty()) {
+                FD_SET(sock, &write_fds);
+            }
+        }
+
+        // 50ms timeout for responsive stop() and periodic expiration
+        timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 50000;
+
+        int activity = select(0, &read_fds, &write_fds, nullptr, &tv);
+
+        if (!running_) {
+            break;
+        }
+
+        if (activity == SOCKET_ERROR) {
+            int err = WSAGetLastError();
+            if (running_ && err != WSAEINTR) {
+                log_error("select");
+            }
+            break;
+        }
+
+        std::vector<SOCKET> to_remove;
+
+        // 1. Accept new connections
+        if (FD_ISSET(listen_socket_, &read_fds)) {
+            process_new_connections();
+        }
+
+        // 2. Process active clients
+        for (auto& [sock, client] : clients_) {
+            if (FD_ISSET(sock, &read_fds)) {
+                process_client_read(sock, client, to_remove);
+            }
+            if (FD_ISSET(sock, &write_fds) && !client.send_buffer.empty()) {
+                process_client_write(sock, client, to_remove);
+            }
+        }
+
+        // 3. Remove disconnected clients
+        for (SOCKET sock : to_remove) {
+            remove_client(sock);
+        }
+
+        // 4. Active TTL expiration sweep
+        db_.purge_expired();
+    }
+
+    // Clean up all active clients
+    for (auto& [sock, client] : clients_) {
+        closesocket(sock);
+    }
+    clients_.clear();
+
+    running_ = false;
+}
+
+void Server::process_new_connections() {
+    while (running_) {
         sockaddr_in client_addr{};
         int addr_len = sizeof(client_addr);
+        SOCKET new_sock = accept(listen_socket_, reinterpret_cast<sockaddr*>(&client_addr), &addr_len);
 
-        SOCKET new_client = accept(
-            listen_socket_,
-            reinterpret_cast<sockaddr*>(&client_addr),
-            &addr_len
-        );
-
-        if (new_client == INVALID_SOCKET) {
+        if (new_sock == INVALID_SOCKET) {
+            int err = WSAGetLastError();
+            if (err == WSAEWOULDBLOCK) {
+                break; // No more pending connections
+            }
             if (running_) {
                 log_error("accept");
             }
             break;
         }
 
-        char client_ip[INET_ADDRSTRLEN];
-        inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
-        uint16_t client_port = ntohs(client_addr.sin_port);
+        if (!set_non_blocking(new_sock)) {
+            closesocket(new_sock);
+            continue;
+        }
 
-        std::cout << "Client connected: " << client_ip << ":" << client_port << std::endl;
+        // Disable Nagle's algorithm for low-latency responses
+        int flag = 1;
+        setsockopt(new_sock, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&flag), sizeof(flag));
 
-        handle_client(new_client);
+        char ip_str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &client_addr.sin_addr, ip_str, sizeof(ip_str));
+        uint16_t port = ntohs(client_addr.sin_port);
 
-        closesocket(new_client);
-        std::cout << "Client disconnected." << std::endl;
+        ClientContext ctx;
+        ctx.socket = new_sock;
+        ctx.peer_ip = ip_str;
+        ctx.peer_port = port;
+
+        clients_[new_sock] = std::move(ctx);
     }
+}
 
-    running_ = false;
+void Server::process_client_read(SOCKET sock, ClientContext& client, std::vector<SOCKET>& to_remove) {
+    char buffer[4096];
+    int n = recv(sock, buffer, sizeof(buffer), 0);
+
+    if (n > 0) {
+        client.parser.append(buffer, n);
+
+        RespValue cmd;
+        while (running_) {
+            ParseStatus status = client.parser.parse_next(cmd);
+            if (status == ParseStatus::Ok) {
+                RespValue response = CommandDispatcher::execute(cmd, db_);
+                if (aof_.is_open() && !response.is_error()) {
+                    aof_.append(cmd);
+                }
+                client.send_buffer.append(response.serialize());
+            } else if (status == ParseStatus::Incomplete) {
+                break; // Awaiting more TCP data
+            } else {
+                std::string err = RespEncoder::error("ERR Protocol error: invalid request");
+                client.send_buffer.append(err);
+                client.parser.reset();
+                break;
+            }
+        }
+
+        // Try to immediately transmit any generated responses
+        if (!client.send_buffer.empty()) {
+            int sent = send(sock, client.send_buffer.data(), static_cast<int>(client.send_buffer.size()), 0);
+            if (sent > 0) {
+                client.send_buffer.erase(0, sent);
+            } else if (sent == SOCKET_ERROR) {
+                int err = WSAGetLastError();
+                if (err != WSAEWOULDBLOCK) {
+                    to_remove.push_back(sock);
+                }
+            }
+        }
+    } else if (n == 0) {
+        // Client closed connection gracefully
+        to_remove.push_back(sock);
+    } else {
+        int err = WSAGetLastError();
+        if (err != WSAEWOULDBLOCK) {
+            to_remove.push_back(sock);
+        }
+    }
+}
+
+void Server::process_client_write(SOCKET sock, ClientContext& client, std::vector<SOCKET>& to_remove) {
+    if (client.send_buffer.empty()) return;
+
+    int sent = send(sock, client.send_buffer.data(), static_cast<int>(client.send_buffer.size()), 0);
+    if (sent > 0) {
+        client.send_buffer.erase(0, sent);
+    } else if (sent == SOCKET_ERROR) {
+        int err = WSAGetLastError();
+        if (err != WSAEWOULDBLOCK) {
+            to_remove.push_back(sock);
+        }
+    }
+}
+
+void Server::remove_client(SOCKET sock) {
+    auto it = clients_.find(sock);
+    if (it != clients_.end()) {
+        closesocket(it->second.socket);
+        clients_.erase(it);
+    }
 }
 
 void Server::stop() {
     running_ = false;
 
-    SOCKET cs = client_socket_.load();
-    if (cs != INVALID_SOCKET) {
-        shutdown(cs, SD_BOTH);
-    }
-
     if (listen_socket_ != INVALID_SOCKET) {
         closesocket(listen_socket_);
         listen_socket_ = INVALID_SOCKET;
+    }
+
+    for (auto& [sock, client] : clients_) {
+        closesocket(sock);
     }
 }
 
@@ -148,76 +309,8 @@ Database& Server::database() {
     return db_;
 }
 
-void Server::handle_client(SOCKET client_socket) {
-    client_socket_.store(client_socket);
-
-    const int BUFFER_SIZE = 4096;
-    char buffer[BUFFER_SIZE];
-    RespParser parser;
-
-    while (running_) {
-        int bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
-
-        if (bytes_received > 0) {
-            parser.append(buffer, bytes_received);
-
-            // Process all complete RESP messages in the buffer (supports pipelining)
-            while (running_) {
-                RespValue cmd;
-                ParseStatus status = parser.parse_next(cmd);
-
-                if (status == ParseStatus::Ok) {
-                    // Dispatch command against Database
-                    RespValue response = CommandDispatcher::execute(cmd, db_);
-
-                    if (aof_.is_open() && !response.is_error()) {
-                        aof_.append(cmd);
-                    }
-
-                    std::string response_bytes = response.serialize();
-
-                    if (!send_all(client_socket, response_bytes.data(),
-                                 static_cast<int>(response_bytes.size()))) {
-                        if (running_) {
-                            log_error("send");
-                        }
-                        return;
-                    }
-                } else if (status == ParseStatus::Incomplete) {
-                    // Incomplete command, wait for next recv chunk
-                    break;
-                } else {
-                    // Syntax / protocol error from client
-                    std::string err = RespEncoder::error("ERR Protocol error: invalid request");
-                    send_all(client_socket, err.data(), static_cast<int>(err.size()));
-                    parser.reset();
-                    return;
-                }
-            }
-        } else if (bytes_received == 0) {
-            // Graceful client disconnect
-            break;
-        } else {
-            if (running_) {
-                log_error("recv");
-            }
-            break;
-        }
-    }
-
-    client_socket_.store(INVALID_SOCKET);
-}
-
-bool Server::send_all(SOCKET sock, const char* data, int length) {
-    int total_sent = 0;
-    while (total_sent < length) {
-        int bytes_sent = send(sock, data + total_sent, length - total_sent, 0);
-        if (bytes_sent == SOCKET_ERROR) {
-            return false;
-        }
-        total_sent += bytes_sent;
-    }
-    return true;
+std::size_t Server::connected_clients_count() const {
+    return clients_.size();
 }
 
 void Server::log_error(const std::string& context) const {

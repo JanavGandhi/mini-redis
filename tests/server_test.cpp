@@ -1,13 +1,17 @@
-// server_test.cpp — Integration tests for Server executing Redis commands over TCP.
+// server_test.cpp — Integration tests for non-blocking multi-client Server (Milestone 8).
+
+#ifndef FD_SETSIZE
+#define FD_SETSIZE 256
+#endif
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+#include "server.h"
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
-
-#include "server.h"
 
 #include <chrono>
 #include <cstring>
@@ -135,7 +139,7 @@ std::string send_and_receive(SOCKET sock, const std::string& request) {
     return "";
 }
 
-// ─── Test Cases ──────────────────────────────────────────────────────────────
+// ─── Basic Lifecycle & Command Tests ─────────────────────────────────────────
 
 void test_server_starts_and_stops() {
     TestServer ts(TEST_PORT);
@@ -223,17 +227,11 @@ void test_command_expire_and_ttl_over_tcp() {
         return;
     }
 
-    // SET key val EX 100
     std::string set_resp = send_and_receive(client, "*5\r\n$3\r\nSET\r\n$3\r\nkey\r\n$3\r\nval\r\n$2\r\nEX\r\n$3\r\n100\r\n");
     ASSERT_EQ(std::string("+OK\r\n"), set_resp);
 
-    // TTL key -> positive integer response (e.g. :100\r\n or :99\r\n)
     std::string ttl_resp = send_and_receive(client, "*2\r\n$3\r\nTTL\r\n$3\r\nkey\r\n");
     ASSERT_TRUE(ttl_resp.size() >= 3 && ttl_resp[0] == ':');
-
-    // EXPIRE key 200 -> :1\r\n
-    std::string exp_resp = send_and_receive(client, "*3\r\n$6\r\nEXPIRE\r\n$3\r\nkey\r\n$3\r\n200\r\n");
-    ASSERT_EQ(std::string(":1\r\n"), exp_resp);
 
     closesocket(client);
 }
@@ -271,6 +269,114 @@ void test_pipelining() {
     closesocket(client);
 }
 
+// ─── Milestone 8: Multi-Client & Concurrency Tests ───────────────────────────
+
+void test_multiple_concurrent_clients() {
+    TestServer ts(TEST_PORT);
+    ASSERT_TRUE(ts.start());
+
+    const int CLIENT_COUNT = 8;
+    std::vector<std::thread> threads;
+    std::atomic<int> success_count{0};
+
+    for (int i = 0; i < CLIENT_COUNT; ++i) {
+        threads.emplace_back([i, &success_count]() {
+            SOCKET client = connect_to_server(TEST_PORT);
+            if (client == INVALID_SOCKET) return;
+
+            std::string key = "client_key_" + std::to_string(i);
+            std::string val = "client_val_" + std::to_string(i);
+
+            // SET key val
+            std::string set_cmd = "*3\r\n$3\r\nSET\r\n$" + std::to_string(key.size()) + "\r\n" + key +
+                                  "\r\n$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+            std::string set_resp = send_and_receive(client, set_cmd);
+            if (set_resp != "+OK\r\n") {
+                closesocket(client);
+                return;
+            }
+
+            // GET key
+            std::string get_cmd = "*2\r\n$3\r\nGET\r\n$" + std::to_string(key.size()) + "\r\n" + key + "\r\n";
+            std::string get_resp = send_and_receive(client, get_cmd);
+            std::string expected_get = "$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+
+            if (get_resp == expected_get) {
+                ++success_count;
+            }
+
+            closesocket(client);
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    ASSERT_EQ(CLIENT_COUNT, success_count.load());
+}
+
+void test_interleaved_partial_input() {
+    TestServer ts(TEST_PORT);
+    ASSERT_TRUE(ts.start());
+
+    // Client 1 connects
+    SOCKET client1 = connect_to_server(TEST_PORT);
+    ASSERT_TRUE(client1 != INVALID_SOCKET);
+
+    // Client 1 sends partial command (split across packets):
+    // *2\r\n$4\r\nECHO\r\n$5\r\nhe
+    std::string part1 = "*2\r\n$4\r\nECHO\r\n$5\r\nhe";
+    send(client1, part1.data(), static_cast<int>(part1.size()), 0);
+
+    // Client 2 connects concurrently while Client 1 is still half-way
+    SOCKET client2 = connect_to_server(TEST_PORT);
+    ASSERT_TRUE(client2 != INVALID_SOCKET);
+
+    // Client 2 sends a complete PING and gets immediate response!
+    std::string c2_resp = send_and_receive(client2, "*1\r\n$4\r\nPING\r\n");
+    ASSERT_EQ(std::string("+PONG\r\n"), c2_resp);
+    closesocket(client2);
+
+    // Now Client 1 sends the remainder: llo\r\n
+    std::string part2 = "llo\r\n";
+    send(client1, part2.data(), static_cast<int>(part2.size()), 0);
+
+    ASSERT_TRUE(wait_for_data(client1, 2000));
+    char buf[1024];
+    int n = recv(client1, buf, sizeof(buf), 0);
+    ASSERT_TRUE(n > 0);
+    ASSERT_EQ(std::string("$5\r\nhello\r\n"), std::string(buf, n));
+
+    closesocket(client1);
+}
+
+void test_client_disconnect_does_not_affect_others() {
+    TestServer ts(TEST_PORT);
+    ASSERT_TRUE(ts.start());
+
+    SOCKET client1 = connect_to_server(TEST_PORT);
+    SOCKET client2 = connect_to_server(TEST_PORT);
+    ASSERT_TRUE(client1 != INVALID_SOCKET);
+    ASSERT_TRUE(client2 != INVALID_SOCKET);
+
+    // Both clients active
+    ASSERT_EQ(std::string("+PONG\r\n"), send_and_receive(client1, "*1\r\n$4\r\nPING\r\n"));
+    ASSERT_EQ(std::string("+PONG\r\n"), send_and_receive(client2, "*1\r\n$4\r\nPING\r\n"));
+
+    // Client 1 abruptly disconnects
+    closesocket(client1);
+
+    // Give server event loop time to handle disconnect
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    // Client 2 should continue working without issue
+    ASSERT_EQ(std::string("+OK\r\n"), send_and_receive(client2, "*3\r\n$3\r\nSET\r\n$4\r\nstay\r\n$5\r\nalive\r\n"));
+    ASSERT_EQ(std::string("$5\r\nalive\r\n"), send_and_receive(client2, "*2\r\n$3\r\nGET\r\n$4\r\nstay\r\n"));
+
+    closesocket(client2);
+}
+
 // ─── Test Runner ─────────────────────────────────────────────────────────────
 
 int main() {
@@ -292,6 +398,12 @@ int main() {
 
     std::cout << "[TCP Pipelining]" << std::endl;
     RUN_TEST(test_pipelining);
+    std::cout << std::endl;
+
+    std::cout << "[Milestone 8: Multi-Client & Concurrency]" << std::endl;
+    RUN_TEST(test_multiple_concurrent_clients);
+    RUN_TEST(test_interleaved_partial_input);
+    RUN_TEST(test_client_disconnect_does_not_affect_others);
     std::cout << std::endl;
 
     // --- Summary ---

@@ -6,7 +6,7 @@ This is a learning project — every component (networking, protocol parsing, da
 
 ## Current Status
 
-🚧 **Milestone 7: Persistence** — RDB binary snapshots (SAVE/BGSAVE/LASTSAVE), Append-Only File (AOF) with crash recovery & compaction.
+🚧 **Milestone 8: Multiple Clients** — Non-blocking I/O multiplexed event loop (`select`) handling concurrent clients and fragmented input.
 
 ## Prerequisites
 
@@ -63,7 +63,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Milestone 5: Additional data structures (lists, hashes, sets)
 - [x] Milestone 6: Key expiration & TTL
 - [x] Milestone 7: Persistence (snapshots, append-only log)
-- [ ] Milestone 8: Multiple clients & concurrency
+- [x] Milestone 8: Multiple clients & concurrency
 - [ ] Milestone 9: Reliability & performance
 
 ## Technology Stack

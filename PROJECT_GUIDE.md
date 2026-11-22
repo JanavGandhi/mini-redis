@@ -104,10 +104,10 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Append-only log
 - [x] Crash recovery
 
-### Milestone 8: Multiple Clients
-- [ ] Non-blocking I/O
-- [ ] Event loop (select/WSAPoll)
-- [ ] Handle disconnections and partial input
+### Milestone 8: Multiple Clients ✅
+- [x] Non-blocking I/O
+- [x] Event loop (select/WSAPoll)
+- [x] Handle disconnections and partial input
 
 ### Milestone 9: Reliability & Performance
 - [ ] Automated test suite
@@ -149,6 +149,6 @@ None yet — project is in initial setup phase.
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — Milestone 7 files ready for commit.
-- **Build status:** ✅ Compiles and runs successfully. All 87 tests pass (33 database + 28 RESP + 13 command + 7 server + 6 persistence).
-- **Next task:** Commit Milestone 7, then begin Milestone 8 (Multiple Clients & Concurrency).
+- **Last verified commit:** Pending — Milestone 8 files ready for commit.
+- **Build status:** ✅ Compiles and runs successfully. All 90 tests pass (33 database + 28 RESP + 13 command + 10 server + 6 persistence).
+- **Next task:** Commit Milestone 8, then begin Milestone 9 (Reliability & Performance).

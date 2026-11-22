@@ -2,6 +2,22 @@
 
 All notable changes to the mini-redis project will be documented in this file.
 
+## [0.9.0] - 2026-11-22
+
+### Added
+- Non-blocking I/O multiplexed event loop architecture (`Milestone 8`):
+  - Converted sockets to non-blocking mode with `ioctlsocket(FIONBIO)`
+  - Single-threaded event multiplexing loop via `select()` with `FD_SETSIZE 256`
+  - Per-client state context with isolated `RespParser` streaming buffer and send queue
+  - Concurrent client support: handles dozens of simultaneous clients without thread contention or blocking
+  - Resilient partial input handling: streaming parser maintains state across fragmented packets per client
+  - Graceful and abrupt disconnection handling without affecting other active clients
+  - Low-latency TCP responses with `TCP_NODELAY`
+- Expanded Server integration test suite (`tests/server_test.cpp`) to 10 tests:
+  - Added concurrent multi-client stress test with 8 simultaneous worker threads
+  - Added interleaved partial input test verifying non-blocking isolation between clients
+  - Added abrupt client disconnection test verifying stability of remaining connections
+
 ## [0.8.0] - 2026-11-22
 
 ### Added

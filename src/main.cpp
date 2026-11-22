@@ -16,7 +16,7 @@ void handle_shutdown(int /* signal */) {
 
 int main(int argc, char* argv[]) {
     std::cout << "==========================================" << std::endl;
-    std::cout << "        mini-redis server v0.8.0          " << std::endl;
+    std::cout << "        mini-redis server v0.9.0          " << std::endl;
     std::cout << "==========================================" << std::endl;
     std::cout << std::endl;
 
@@ -40,7 +40,8 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    std::cout << "Server ready to accept connections on port 6379." << std::endl;
+    std::cout << "Server ready to accept concurrent connections on port 6379." << std::endl;
+    std::cout << "Engine: Non-blocking I/O multiplexing event loop (select)." << std::endl;
     std::cout << "Connect with redis-cli:" << std::endl;
     std::cout << "    redis-cli -p 6379" << std::endl;
     std::cout << std::endl;
