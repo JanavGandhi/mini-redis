@@ -6,7 +6,7 @@ This is a learning project — every component (networking, protocol parsing, da
 
 ## Current Status
 
-🚧 **Milestone 1: In-Memory Database** — Core key-value store implemented with SET, GET, DEL, EXISTS, FLUSHDB.
+🚧 **Milestone 2: TCP Networking** — Echo server accepting client connections on port 6379 via Winsock2.
 
 ## Prerequisites
 
@@ -57,7 +57,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 
 - [x] Milestone 0: Environment & project setup
 - [x] Milestone 1: In-memory database (SET, GET, DEL, EXISTS, FLUSHDB)
-- [ ] Milestone 2: TCP networking with Winsock2
+- [x] Milestone 2: TCP networking with Winsock2
 - [ ] Milestone 3: RESP protocol parser & encoder
 - [ ] Milestone 4: Core Redis command compatibility
 - [ ] Milestone 5: Additional data structures (lists, hashes, sets)

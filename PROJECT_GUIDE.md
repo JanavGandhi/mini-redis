@@ -71,12 +71,12 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Implement FLUSHDB command
 - [x] Write unit tests for all operations
 
-### Milestone 2: TCP Networking (Winsock2)
-- [ ] Initialize Winsock
-- [ ] Create listening socket on port 6379
-- [ ] Accept single client connection
-- [ ] Send and receive raw bytes
-- [ ] Proper socket cleanup and error handling
+### Milestone 2: TCP Networking (Winsock2) ✅
+- [x] Initialize Winsock
+- [x] Create listening socket on port 6379
+- [x] Accept single client connection
+- [x] Send and receive raw bytes
+- [x] Proper socket cleanup and error handling
 
 ### Milestone 3: RESP Protocol
 - [ ] Parse RESP arrays and bulk strings
@@ -149,6 +149,6 @@ None yet — project is in initial setup phase.
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — Milestone 1 files ready for commit.
-- **Build status:** ✅ Compiles and runs successfully. All 22 tests pass.
-- **Next task:** Commit Milestone 1, then begin Milestone 2 (TCP Networking).
+- **Last verified commit:** Pending — Milestone 2 files ready for commit.
+- **Build status:** ✅ Compiles and runs successfully. All 27 tests pass (21 database + 6 server).
+- **Next task:** Commit Milestone 2, then begin Milestone 3 (RESP Protocol).
