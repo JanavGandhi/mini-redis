@@ -2,6 +2,24 @@
 
 All notable changes to the mini-redis project will be documented in this file.
 
+## [1.0.0] - 2026-11-22
+
+### Added
+- Reliability & Performance suite (`Milestone 9`):
+  - **Malformed Input Protection**: Added strict length bounds (`MAX_BULK_STRING_LENGTH = 64MB`, `MAX_ARRAY_ELEMENTS = 1M`), integer overflow guards, prefix validation, and buffer safety.
+  - **Protocol Fuzzing**: Added automated fuzz testing feeding thousands of pseudo-random byte sequences to ensure zero crashes or infinite loops.
+  - **Resource Limits**:
+    - Configurable `max_clients`: Safely rejects connections with `ERR max number of clients reached` when capacity is exceeded.
+    - Configurable `max_client_buffer_size`: Protects against Denial of Service memory exhaustion attacks by closing runaway sockets.
+    - Configurable `max_keys`: Implements Redis-style Out-Of-Memory prevention (`OOM command not allowed when used memory > 'maxmemory'`).
+  - **Server Observability**: Added `INFO` command returning server version, uptime, total commands processed, memory/keyspace metrics, and atomic performance counters.
+  - **CLI Flags**: Server now supports `-p` / `--port`, `--maxclients`, `--maxkeys`, and `--aof` command-line flags.
+  - **Benchmarking Tool** (`mini-redis-benchmark`):
+    - Standalone benchmarking CLI tool (`src/benchmark_main.cpp`) measuring throughput (ops/sec) and latency distributions (min, avg, p50, p95, p99, max) across PING, SET, GET, LPUSH, and LPOP.
+    - Tested throughput of ~70,000 requests/sec with ~0.06 ms average latency.
+  - **Reliability Test Suite** (`tests/reliability_test.cpp`): 9 dedicated tests verifying malformed input rejection, fuzzing resilience, resource limits, and observability.
+  - Expanded total automated tests to **99 passed tests** across 6 independent suites.
+
 ## [0.9.0] - 2026-11-22
 
 ### Added

@@ -80,6 +80,12 @@ public:
     std::size_t size() const;
     DataType type(const std::string& key) const;
 
+    // ── Resource Limits (Milestone 9) ───────────────────────────────────────
+    // Set maximum number of keys allowed in the database. 0 means unlimited.
+    void set_max_keys(std::size_t max_keys);
+    std::size_t max_keys() const;
+    bool can_add_key(const std::string& key) const;
+
     // ── Expiration & TTL Operations (Milestone 6) ───────────────────────────
     // Set a timeout on key in seconds. Returns true if timeout was set,
     // false if key does not exist. If seconds <= 0, key is immediately expired (deleted).
@@ -156,6 +162,7 @@ private:
 
     mutable std::unordered_map<std::string, ValueVariant> store_;
     mutable std::unordered_map<std::string, TimePoint> expires_;
+    std::size_t max_keys_ = 0;
 };
 
 #endif // MINI_REDIS_DATABASE_H

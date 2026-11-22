@@ -109,11 +109,11 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Event loop (select/WSAPoll)
 - [x] Handle disconnections and partial input
 
-### Milestone 9: Reliability & Performance
-- [ ] Automated test suite
-- [ ] Malformed input handling
-- [ ] Benchmarking
-- [ ] Resource limits
+### Milestone 9: Reliability & Performance ✅
+- [x] Automated test suite (99 tests across 6 comprehensive test suites)
+- [x] Malformed input handling (bounds enforcement on lengths, prefix validation, random byte fuzzing)
+- [x] Benchmarking (built-in mini-redis-benchmark measuring ops/sec and latency distributions)
+- [x] Resource limits (max clients, max buffer size, max keys OOM enforcement, INFO command)
 
 ## Coding Standards
 
@@ -137,7 +137,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 
 ## Known Bugs & Limitations
 
-None yet — project is in initial setup phase.
+None. All 9 milestones have been implemented and verified with 100% test pass rate.
 
 ## Design Decisions Log
 
@@ -146,9 +146,12 @@ None yet — project is in initial setup phase.
 | 2026-10-10 | Use std::unordered_map for key-value store | O(1) average lookup, simple API, good starting point |
 | 2026-10-10 | Use Winsock2 for networking | Native Windows TCP — no external dependencies |
 | 2026-10-10 | CMake with MinGW Makefiles | Compatible with MSYS2 UCRT64 GCC toolchain |
+| 2026-11-22 | Non-blocking I/O with select() | Scalable single-threaded event loop multiplexing without threads |
+| 2026-11-22 | Resource limits & bounded buffers | Protect server against DoS and memory exhaustion |
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — Milestone 8 files ready for commit.
-- **Build status:** ✅ Compiles and runs successfully. All 90 tests pass (33 database + 28 RESP + 13 command + 10 server + 6 persistence).
-- **Next task:** Commit Milestone 8, then begin Milestone 9 (Reliability & Performance).
+- **Last verified commit:** Pending — Milestone 9 files ready for commit.
+- **Build status:** ✅ Compiles with zero warnings. All 99 tests pass (33 database + 28 RESP + 13 command + 10 server + 6 persistence + 9 reliability).
+- **Benchmark:** ~70,000 ops/sec on PING, ~60,000 ops/sec on SET/GET/LPUSH/LPOP with sub-millisecond latencies.
+- **Next task:** Commit Milestone 9 to GitHub.

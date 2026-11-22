@@ -27,6 +27,14 @@
 #include <string_view>   // std::string_view (C++17 zero-copy string slice)
 #include <vector>        // std::vector
 
+// ─── RESP Limits (Milestone 9) ──────────────────────────────────────────────
+
+// Maximum bulk string length allowed to be parsed (64 MB default)
+inline constexpr std::size_t MAX_BULK_STRING_LENGTH = 64 * 1024 * 1024;
+
+// Maximum array element count allowed to be parsed (1 million default)
+inline constexpr std::size_t MAX_ARRAY_ELEMENTS = 1024 * 1024;
+
 // ─── RESP Types ─────────────────────────────────────────────────────────────
 
 enum class RespType {

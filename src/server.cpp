@@ -191,6 +191,14 @@ void Server::process_new_connections() {
             break;
         }
 
+        // Enforce max clients limit (Milestone 9)
+        if (clients_.size() >= max_clients_) {
+            std::string err = RespEncoder::error("ERR max number of clients reached");
+            send(new_sock, err.data(), static_cast<int>(err.size()), 0);
+            closesocket(new_sock);
+            continue;
+        }
+
         if (!set_non_blocking(new_sock)) {
             closesocket(new_sock);
             continue;
@@ -219,6 +227,14 @@ void Server::process_client_read(SOCKET sock, ClientContext& client, std::vector
 
     if (n > 0) {
         client.parser.append(buffer, n);
+
+        // Guard against runaway buffer / memory exhaustion (Milestone 9)
+        if (client.parser.buffer_size() > max_client_buffer_size_) {
+            std::string err = RespEncoder::error("ERR Protocol error: max client buffer size exceeded");
+            send(sock, err.data(), static_cast<int>(err.size()), 0);
+            to_remove.push_back(sock);
+            return;
+        }
 
         RespValue cmd;
         while (running_) {
@@ -311,6 +327,22 @@ Database& Server::database() {
 
 std::size_t Server::connected_clients_count() const {
     return clients_.size();
+}
+
+void Server::set_max_clients(std::size_t max_clients) {
+    max_clients_ = max_clients;
+}
+
+std::size_t Server::max_clients() const {
+    return max_clients_;
+}
+
+void Server::set_max_client_buffer_size(std::size_t size) {
+    max_client_buffer_size_ = size;
+}
+
+std::size_t Server::max_client_buffer_size() const {
+    return max_client_buffer_size_;
 }
 
 void Server::log_error(const std::string& context) const {

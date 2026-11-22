@@ -329,8 +329,16 @@ ParseStatus RespParser::parse(std::string_view input, RespValue& out, std::size_
                 return ParseStatus::Error;
             }
 
+            // Exceeds maximum allowed bulk string size (Milestone 9)
+            if (static_cast<uint64_t>(len) > MAX_BULK_STRING_LENGTH) {
+                return ParseStatus::Error;
+            }
+
             // Total bytes required: header + CRLF + len bytes + trailing CRLF (2)
             std::size_t data_start = first_crlf + 2;
+            if (static_cast<std::size_t>(len) > SIZE_MAX - data_start - 2) {
+                return ParseStatus::Error;
+            }
             std::size_t total_needed = data_start + static_cast<std::size_t>(len) + 2;
 
             if (input.size() < total_needed) {
@@ -370,6 +378,11 @@ ParseStatus RespParser::parse(std::string_view input, RespValue& out, std::size_
 
             // Negative counts < -1 are invalid
             if (count < -1) {
+                return ParseStatus::Error;
+            }
+
+            // Exceeds maximum allowed array size (Milestone 9)
+            if (static_cast<uint64_t>(count) > MAX_ARRAY_ELEMENTS) {
                 return ParseStatus::Error;
             }
 

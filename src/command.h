@@ -14,12 +14,17 @@ public:
     static RespValue execute(const RespValue& command_value, Database& db);
     static RespValue execute_args(const std::vector<std::string>& args, Database& db);
 
+    // Reliability & stats (Milestone 9)
+    static uint64_t total_commands_processed();
+    static void reset_stats();
+
 private:
     // Core server commands
     static RespValue handle_ping(const std::vector<std::string>& args);
     static RespValue handle_echo(const std::vector<std::string>& args);
     static RespValue handle_flushdb(const std::vector<std::string>& args, Database& db);
     static RespValue handle_command(const std::vector<std::string>& args);
+    static RespValue handle_info(const std::vector<std::string>& args, const Database& db);
 
     // Generic key commands
     static RespValue handle_del(const std::vector<std::string>& args, Database& db);

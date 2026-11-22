@@ -70,6 +70,13 @@ public:
     Database& database();
     std::size_t connected_clients_count() const;
 
+    // Resource limits (Milestone 9)
+    void set_max_clients(std::size_t max_clients);
+    std::size_t max_clients() const;
+
+    void set_max_client_buffer_size(std::size_t size);
+    std::size_t max_client_buffer_size() const;
+
 private:
     uint16_t port_;
     Database internal_db_;
@@ -79,6 +86,9 @@ private:
     bool winsock_initialized_;
     AofManager aof_;
     std::string aof_path_;
+
+    std::size_t max_clients_ = 128;
+    std::size_t max_client_buffer_size_ = 10 * 1024 * 1024; // 10 MB
 
     std::unordered_map<SOCKET, ClientContext> clients_;
 

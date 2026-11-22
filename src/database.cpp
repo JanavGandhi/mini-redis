@@ -72,6 +72,29 @@ DataType Database::type(const std::string& key) const {
     return DataType::None;
 }
 
+// ─── Resource Limits (Milestone 9) ───────────────────────────────────────────
+
+void Database::set_max_keys(std::size_t max_keys) {
+    max_keys_ = max_keys;
+}
+
+std::size_t Database::max_keys() const {
+    return max_keys_;
+}
+
+bool Database::can_add_key(const std::string& key) const {
+    if (max_keys_ == 0) {
+        return true;
+    }
+    // Lazy expire check first
+    check_and_expire(key);
+    // If the key already exists, updating it does not add a new key
+    if (store_.find(key) != store_.end()) {
+        return true;
+    }
+    return store_.size() < max_keys_;
+}
+
 // ─── Expiration & TTL Operations (Milestone 6) ───────────────────────────────
 
 bool Database::expire(const std::string& key, int64_t seconds) {

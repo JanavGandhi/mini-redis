@@ -6,7 +6,7 @@ This is a learning project — every component (networking, protocol parsing, da
 
 ## Current Status
 
-🚧 **Milestone 8: Multiple Clients** — Non-blocking I/O multiplexed event loop (`select`) handling concurrent clients and fragmented input.
+🎉 **All Milestones Complete (v1.0.0)!** — Production-ready learning implementation featuring in-memory storage, non-blocking I/O event loop (`select`), multi-type structures, TTL expiration, snapshots & AOF persistence, fuzz-tested protocol parser, resource limits, and high-performance benchmarking (~70,000 ops/sec).
 
 ## Prerequisites
 
@@ -29,8 +29,19 @@ cmake -S . -B build -G "MinGW Makefiles"
 # 2. Compile
 cmake --build build
 
-# 3. Run
-./build/mini-redis.exe
+# 3. Run server
+./build/mini-redis.exe -p 6379
+
+# 4. Run benchmarking tool
+./build/mini-redis-benchmark.exe -p 6379 -n 10000 -c 10 -P 4
+
+# 5. Run automated test suites
+./build/mini-redis-tests.exe
+./build/mini-redis-resp-tests.exe
+./build/mini-redis-command-tests.exe
+./build/mini-redis-persistence-tests.exe
+./build/mini-redis-server-tests.exe
+./build/mini-redis-reliability-tests.exe
 ```
 
 ## Project Architecture
@@ -64,7 +75,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Milestone 6: Key expiration & TTL
 - [x] Milestone 7: Persistence (snapshots, append-only log)
 - [x] Milestone 8: Multiple clients & concurrency
-- [ ] Milestone 9: Reliability & performance
+- [x] Milestone 9: Reliability & performance
 
 ## Technology Stack
 

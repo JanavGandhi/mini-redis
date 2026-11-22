@@ -13,6 +13,8 @@
 namespace {
 
 static std::atomic<int64_t> s_last_save_time{0};
+static std::atomic<uint64_t> s_total_commands{0};
+static const auto s_start_time = std::chrono::steady_clock::now();
 
 std::string to_upper(std::string s) {
     std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
@@ -52,11 +54,14 @@ RespValue CommandDispatcher::execute_args(const std::vector<std::string>& args, 
         return RespValue::make_error("ERR empty command");
     }
 
+    s_total_commands.fetch_add(1, std::memory_order_relaxed);
+
     std::string cmd = to_upper(args[0]);
 
     // Core / Generic
     if (cmd == "PING")      return handle_ping(args);
     if (cmd == "ECHO")      return handle_echo(args);
+    if (cmd == "INFO")      return handle_info(args, db);
     if (cmd == "FLUSHDB")   return handle_flushdb(args, db);
     if (cmd == "COMMAND")   return handle_command(args);
     if (cmd == "DEL")       return handle_del(args, db);
@@ -130,6 +135,42 @@ RespValue CommandDispatcher::handle_flushdb(const std::vector<std::string>& args
 
 RespValue CommandDispatcher::handle_command(const std::vector<std::string>& /* args */) {
     return RespValue::make_array({});
+}
+
+RespValue CommandDispatcher::handle_info(const std::vector<std::string>& /*args*/, const Database& db) {
+    auto now = std::chrono::steady_clock::now();
+    auto uptime_sec = std::chrono::duration_cast<std::chrono::seconds>(now - s_start_time).count();
+
+    std::string info;
+    info += "# Server\r\n";
+    info += "redis_version:0.1.0\r\n";
+    info += "mini_redis_version:0.1.0\r\n";
+    info += "os:Windows\r\n";
+    info += "arch_bits:64\r\n";
+    info += "uptime_in_seconds:" + std::to_string(uptime_sec) + "\r\n";
+    info += "\r\n";
+
+    info += "# Stats\r\n";
+    info += "total_commands_processed:" + std::to_string(s_total_commands.load()) + "\r\n";
+    info += "\r\n";
+
+    info += "# Memory\r\n";
+    info += "max_keys:" + std::to_string(db.max_keys()) + "\r\n";
+    info += "used_keys:" + std::to_string(db.size()) + "\r\n";
+    info += "\r\n";
+
+    info += "# Keyspace\r\n";
+    info += "db0:keys=" + std::to_string(db.size()) + "\r\n";
+
+    return RespValue::make_bulk_string(info);
+}
+
+uint64_t CommandDispatcher::total_commands_processed() {
+    return s_total_commands.load();
+}
+
+void CommandDispatcher::reset_stats() {
+    s_total_commands.store(0);
 }
 
 RespValue CommandDispatcher::handle_del(const std::vector<std::string>& args, Database& db) {
@@ -242,6 +283,10 @@ RespValue CommandDispatcher::handle_set(const std::vector<std::string>& args, Da
         return RespValue::make_error("ERR wrong number of arguments for 'set' command");
     }
 
+    if (!db.can_add_key(args[1])) {
+        return RespValue::make_error("OOM command not allowed when used memory > 'maxmemory'");
+    }
+
     int64_t ttl_ms = 0;
 
     if (args.size() == 3) {
@@ -293,6 +338,9 @@ RespValue CommandDispatcher::handle_lpush(const std::vector<std::string>& args, 
     if (args.size() < 3) {
         return RespValue::make_error("ERR wrong number of arguments for 'lpush' command");
     }
+    if (!db.can_add_key(args[1])) {
+        return RespValue::make_error("OOM command not allowed when used memory > 'maxmemory'");
+    }
     std::vector<std::string> values(args.begin() + 2, args.end());
     auto res = db.lpush(args[1], values);
     if (res.wrong_type) {
@@ -304,6 +352,9 @@ RespValue CommandDispatcher::handle_lpush(const std::vector<std::string>& args, 
 RespValue CommandDispatcher::handle_rpush(const std::vector<std::string>& args, Database& db) {
     if (args.size() < 3) {
         return RespValue::make_error("ERR wrong number of arguments for 'rpush' command");
+    }
+    if (!db.can_add_key(args[1])) {
+        return RespValue::make_error("OOM command not allowed when used memory > 'maxmemory'");
     }
     std::vector<std::string> values(args.begin() + 2, args.end());
     auto res = db.rpush(args[1], values);
@@ -381,6 +432,9 @@ RespValue CommandDispatcher::handle_hset(const std::vector<std::string>& args, D
     if (args.size() < 4 || (args.size() % 2 != 0)) {
         return RespValue::make_error("ERR wrong number of arguments for 'hset' command");
     }
+    if (!db.can_add_key(args[1])) {
+        return RespValue::make_error("OOM command not allowed when used memory > 'maxmemory'");
+    }
 
     std::vector<std::pair<std::string, std::string>> field_values;
     for (std::size_t i = 2; i < args.size(); i += 2) {
@@ -454,6 +508,9 @@ RespValue CommandDispatcher::handle_hgetall(const std::vector<std::string>& args
 RespValue CommandDispatcher::handle_sadd(const std::vector<std::string>& args, Database& db) {
     if (args.size() < 3) {
         return RespValue::make_error("ERR wrong number of arguments for 'sadd' command");
+    }
+    if (!db.can_add_key(args[1])) {
+        return RespValue::make_error("OOM command not allowed when used memory > 'maxmemory'");
     }
     std::vector<std::string> members(args.begin() + 2, args.end());
     auto res = db.sadd(args[1], members);

@@ -93,3 +93,17 @@ add_executable(mini-redis-persistence-tests
     tests/persistence_test.cpp
 )
 target_link_libraries(mini-redis-persistence-tests PRIVATE mini-redis-lib)
+
+# Reliability & Performance unit tests (Milestone 9).
+add_executable(mini-redis-reliability-tests
+    tests/reliability_test.cpp
+)
+target_link_libraries(mini-redis-reliability-tests PRIVATE mini-redis-lib)
+
+# ─── Benchmark Executable ───────────────────────────────────────────────────
+# Standalone high-throughput benchmarking tool (Milestone 9).
+
+add_executable(mini-redis-benchmark
+    src/benchmark_main.cpp
+)
+target_link_libraries(mini-redis-benchmark PRIVATE mini-redis-lib)
