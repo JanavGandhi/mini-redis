@@ -6,7 +6,7 @@ This is a learning project — every component (networking, protocol parsing, da
 
 ## Current Status
 
-🚧 **Milestone 3: RESP Protocol** — Full RESP2 parser & encoder with fragmented TCP streaming support.
+🚧 **Milestone 4: Core Command Compatibility** — Fully functional Redis server compatible with `redis-cli` (PING, ECHO, SET, GET, DEL, EXISTS, FLUSHDB).
 
 ## Prerequisites
 
@@ -59,7 +59,7 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Milestone 1: In-memory database (SET, GET, DEL, EXISTS, FLUSHDB)
 - [x] Milestone 2: TCP networking with Winsock2
 - [x] Milestone 3: RESP protocol parser & encoder
-- [ ] Milestone 4: Core Redis command compatibility
+- [x] Milestone 4: Core Redis command compatibility
 - [ ] Milestone 5: Additional data structures (lists, hashes, sets)
 - [ ] Milestone 6: Key expiration & TTL
 - [ ] Milestone 7: Persistence (snapshots, append-only log)

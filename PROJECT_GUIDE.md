@@ -84,10 +84,10 @@ Client ←── TCP Networking ←── Response Encoder ←──────
 - [x] Encode responses (simple strings, errors, integers, bulk strings, arrays)
 - [x] Validate and reject malformed input
 
-### Milestone 4: Core Command Compatibility
-- [ ] Integrate networking + parsing + database
-- [ ] PING, ECHO, SET, GET, DEL, EXISTS, FLUSHDB
-- [ ] Test with redis-cli or custom client
+### Milestone 4: Core Command Compatibility ✅
+- [x] Integrate networking + parsing + database
+- [x] PING, ECHO, SET, GET, DEL, EXISTS, FLUSHDB
+- [x] Test with redis-cli or custom client
 
 ### Milestone 5: Additional Data Structures
 - [ ] Lists (LPUSH, RPUSH, LPOP, RPOP, LRANGE, LLEN)
@@ -149,6 +149,6 @@ None yet — project is in initial setup phase.
 
 ## Latest Verified State
 
-- **Last verified commit:** Pending — Milestone 3 files ready for commit.
-- **Build status:** ✅ Compiles and runs successfully. All 55 tests pass (21 database + 6 server + 28 RESP).
-- **Next task:** Commit Milestone 3, then begin Milestone 4 (Core Command Compatibility).
+- **Last verified commit:** Pending — Milestone 4 files ready for commit.
+- **Build status:** ✅ Compiles and runs successfully. All 73 tests pass (21 database + 28 RESP + 18 command + 6 server).
+- **Next task:** Commit Milestone 4, then begin Milestone 5 (Additional Data Structures: Lists, Hashes, Sets).

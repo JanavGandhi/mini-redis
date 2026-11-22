@@ -2,6 +2,24 @@
 
 All notable changes to the mini-redis project will be documented in this file.
 
+## [0.5.0] - 2026-11-22
+
+### Added
+- `CommandDispatcher` class (`src/command.h`, `src/command.cpp`):
+  - Routes and executes Redis commands against the `Database`
+  - Case-insensitive command parsing (e.g. `ping`, `PING`, `pInG`)
+  - Argument count validation and standard Redis error messages
+  - Core commands: `PING`, `ECHO`, `SET`, `GET`, `DEL`, `EXISTS`, `FLUSHDB`
+  - `COMMAND` handler returning empty array for `redis-cli` compatibility
+- Integrated full end-to-end pipeline: TCP Server ──→ RESP Parser ──→ Command Dispatcher ──→ Database Engine
+- Full pipelining support over TCP connections
+- Command Dispatcher unit tests (`tests/command_test.cpp`) — 18 unit tests
+- TCP Server integration tests (`tests/server_test.cpp`) updated with live command execution over TCP sockets
+- Added `mini-redis-command-tests` target in `CMakeLists.txt`
+
+### Changed
+- `main.cpp` updated with server banner, supported command list, and connection instructions
+
 ## [0.4.0] - 2026-11-22
 
 ### Added

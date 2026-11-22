@@ -27,14 +27,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 add_compile_options(-Wall -Wextra -Wpedantic)
 
 # ─── Core Library ────────────────────────────────────────────────────────────
-# Build the core logic (database + networking + RESP protocol) as a static
-# library so both the server executable and test executables can link against it
-# without compiling the same source files twice.
+# Build the core logic (database + networking + RESP protocol + command dispatcher)
+# as a static library so both the server executable and test executables can link
+# against it without compiling the same source files twice.
 
 add_library(mini-redis-lib STATIC
     src/database.cpp
     src/server.cpp
     src/resp.cpp
+    src/command.cpp
 )
 
 # Let any target that links mini-redis-lib use #include "database.h" etc.
@@ -68,7 +69,7 @@ add_executable(mini-redis-tests
 )
 target_link_libraries(mini-redis-tests PRIVATE mini-redis-lib)
 
-# Server (networking) unit tests.
+# Server (networking & TCP command integration) tests.
 add_executable(mini-redis-server-tests
     tests/server_test.cpp
 )
@@ -79,3 +80,9 @@ add_executable(mini-redis-resp-tests
     tests/resp_test.cpp
 )
 target_link_libraries(mini-redis-resp-tests PRIVATE mini-redis-lib)
+
+# Command dispatcher unit tests.
+add_executable(mini-redis-command-tests
+    tests/command_test.cpp
+)
+target_link_libraries(mini-redis-command-tests PRIVATE mini-redis-lib)
